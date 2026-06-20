@@ -11,7 +11,7 @@ use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
 
 use crate::bindings;
-use crate::components::{CategoryList, PlayerOverlay, SourcesPanel, StreamGrid};
+use crate::components::{CategoryList, PlayerOverlay, SourcesPanel, Spinner, StreamGrid};
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
 fn bump_source(mut sources: Signal<Vec<XtreamCredentials>>, c: XtreamCredentials) {
@@ -216,18 +216,12 @@ pub fn Browse() -> Element {
                     }
                     main {
                         class: "flex-1 overflow-y-auto",
-                        // Only blank the area when there is nothing cached to show.
+                        // Show the spinner only when there's nothing cached to show.
                         // With cached channels present we render them immediately and
                         // let the background refresh swap in fresh data silently.
                         if loading() && streams().is_empty() {
-                            p { class: "p-6 text-sm text-neutral-500", "Loading…" }
+                            Spinner {}
                         } else {
-                            if loading() {
-                                p {
-                                    class: "px-6 pt-4 text-xs text-neutral-400",
-                                    "Refreshing…"
-                                }
-                            }
                             StreamGrid { streams: streams(), on_play }
                         }
                     }
