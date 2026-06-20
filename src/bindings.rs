@@ -80,6 +80,36 @@ async fn call_unit(cmd: &str, args: &impl Serialize) -> Result<(), AppError> {
     }
 }
 
+/// All saved Xtream accounts, most-recently-used first.
+pub async fn saved_sources() -> Result<Vec<XtreamCredentials>, AppError> {
+    call("saved_sources", &NoArgs {}).await
+}
+
+/// Forget a saved account and drop its cached catalog.
+pub async fn forget_source(creds: &XtreamCredentials) -> Result<(), AppError> {
+    call_unit("forget_source", &CategoriesArgs { creds }).await
+}
+
+/// Cached categories for an account (empty if nothing cached yet).
+pub async fn cached_categories(creds: &XtreamCredentials) -> Result<Vec<Category>, AppError> {
+    call("cached_categories", &CategoriesArgs { creds }).await
+}
+
+/// Cached streams for an account + category (empty if nothing cached yet).
+pub async fn cached_streams(
+    creds: &XtreamCredentials,
+    category_id: &str,
+) -> Result<Vec<Stream>, AppError> {
+    call(
+        "cached_streams",
+        &StreamsArgs {
+            creds,
+            category_id: Some(category_id),
+        },
+    )
+    .await
+}
+
 /// List the live categories for an Xtream account.
 pub async fn list_categories(creds: &XtreamCredentials) -> Result<Vec<Category>, AppError> {
     call("list_categories", &CategoriesArgs { creds }).await
