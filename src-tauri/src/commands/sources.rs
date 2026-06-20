@@ -5,7 +5,7 @@
 //! `CoreError` to the serializable `AppError`. The real orchestration lives in
 //! `cathode_core`.
 
-use cathode_core::error::CoreError;
+use cathode_core::error::{AppError, CoreError};
 use cathode_core::model::{Category, Stream};
 use cathode_core::sources::xtream::{
     fetch_live_categories, fetch_live_streams, XtreamCredentials, XtreamSource,
@@ -14,7 +14,6 @@ use cathode_core::transport::Transport;
 use tauri::State;
 use tracing::{info_span, Instrument};
 
-use crate::error::AppError;
 use crate::state::AppState;
 
 /// Fetch live categories for the given credentials. Generic for testability.
