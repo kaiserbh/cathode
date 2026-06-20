@@ -23,10 +23,24 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 cathode-core = { path = "../crates/core" }
-tauri-plugin-libmpv = "0.3"
 reqwest = "0.12"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+# Embedded playback: link libmpv directly and drive it via the render API.
+libmpv2 = { version = "6", features = ["render"] }
+raw-window-handle = "0.6"
+
+# macOS: own a native OpenGL view inside the Tauri window for the mpv surface.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = [
+    "NSView",
+    "NSWindow",
+    "NSOpenGL",
+    "NSOpenGLView",
+    "NSResponder",
+] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
 
 [dev-dependencies]
 wiremock = "0.6"

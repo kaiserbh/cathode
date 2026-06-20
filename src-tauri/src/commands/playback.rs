@@ -1,64 +1,39 @@
 //! Playback commands.
 //!
-//! These wrap the `tauri-plugin-libmpv` `MpvExt` API so the UI controls mpv only
-//! through our own commands (AGENTS.md). Because the UI never sees the plugin, if
-//! the plugin can't composite on a platform we can swap these bodies for a custom
-//! libmpv integration without touching the frontend or bindings.
+//! Thin wrappers over our native [`Player`] backend so the UI controls mpv only
+//! through these commands. The backend can change (plugin → libmpv2 render API,
+//! per platform) without the frontend or these signatures changing.
 
 use cathode_core::error::AppError;
 use cathode_core::sources::xtream::{XtreamCredentials, XtreamSource};
-use serde_json::{json, Value};
-use tauri::AppHandle;
-use tauri_plugin_libmpv::MpvExt;
+use tauri::State;
 use tracing::info_span;
 
-/// The single player window. One window today; revisit if we add more.
-const WINDOW: &str = "main";
-
-/// Map a plugin error into our serializable AppError.
-fn playback_err(context: &str, e: impl std::fmt::Display) -> AppError {
-    AppError {
-        code: "playback".to_string(),
-        message: format!("{context}: {e}"),
-    }
-}
+use crate::playback::Player;
 
 /// Load and play a live stream by its provider id (Xtream `stream_id`).
 #[tauri::command]
 pub fn play_stream(
-    app: AppHandle,
+    player: State<'_, Player>,
     creds: XtreamCredentials,
     stream_id: String,
 ) -> Result<(), AppError> {
     let _span = info_span!("play_stream", stream_id = %stream_id).entered();
-
     let url = XtreamSource::from_credentials(&creds).live_stream_url(&stream_id, "ts");
-    let mpv = app.mpv();
-    mpv.command("loadfile", &vec![json!(url)], WINDOW)
-        .map_err(|e| playback_err("loadfile", e))?;
-    mpv.set_property("pause", &json!(false), WINDOW)
-        .map_err(|e| playback_err("resume", e))?;
-    Ok(())
+    player.load(&url)
 }
 
 #[tauri::command]
-pub fn pause_playback(app: AppHandle) -> Result<(), AppError> {
-    app.mpv()
-        .set_property("pause", &json!(true), WINDOW)
-        .map_err(|e| playback_err("pause", e))
+pub fn pause_playback(player: State<'_, Player>) -> Result<(), AppError> {
+    player.set_pause(true)
 }
 
 #[tauri::command]
-pub fn resume_playback(app: AppHandle) -> Result<(), AppError> {
-    app.mpv()
-        .set_property("pause", &json!(false), WINDOW)
-        .map_err(|e| playback_err("resume", e))
+pub fn resume_playback(player: State<'_, Player>) -> Result<(), AppError> {
+    player.set_pause(false)
 }
 
 #[tauri::command]
-pub fn stop_playback(app: AppHandle) -> Result<(), AppError> {
-    let no_args: Vec<Value> = Vec::new();
-    app.mpv()
-        .command("stop", &no_args, WINDOW)
-        .map_err(|e| playback_err("stop", e))
+pub fn stop_playback(player: State<'_, Player>) -> Result<(), AppError> {
+    player.stop()
 }
