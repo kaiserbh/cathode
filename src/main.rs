@@ -1,4 +1,7 @@
 mod app;
+mod bindings;
+mod components;
+mod views;
 
 use app::App;
 use dioxus::prelude::*;

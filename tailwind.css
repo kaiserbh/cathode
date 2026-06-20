@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Scan the Dioxus frontend for class names used in rsx!. */
+@source "./src";
