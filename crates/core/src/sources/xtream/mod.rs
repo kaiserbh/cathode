@@ -15,6 +15,31 @@ pub use parse::{parse_live_categories, parse_live_streams};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::{Deserialize, Serialize};
 
+use crate::catalog::SourceRecord;
+use crate::error::CoreError;
+
+/// Discriminator stored on a persisted Xtream source.
+pub const XTREAM_KIND: &str = "xtream";
+
+/// Turn credentials into the opaque [`SourceRecord`] the catalog persists: the id
+/// is the stable account id, and the payload is the credentials as JSON.
+pub fn source_record(creds: &XtreamCredentials) -> Result<SourceRecord, CoreError> {
+    let payload = serde_json::to_string(creds)
+        .map_err(|e| CoreError::storage("serialize xtream source", e.to_string()))?;
+    Ok(SourceRecord {
+        id: XtreamSource::from_credentials(creds).source_id(),
+        kind: XTREAM_KIND.to_string(),
+        payload,
+    })
+}
+
+/// Recover credentials from a persisted [`SourceRecord`] (the inverse of
+/// [`source_record`]).
+pub fn credentials_from_record(record: &SourceRecord) -> Result<XtreamCredentials, CoreError> {
+    serde_json::from_str(&record.payload)
+        .map_err(|e| CoreError::storage("deserialize xtream source", e.to_string()))
+}
+
 /// Xtream account credentials as they cross the command boundary from the UI.
 ///
 /// A plain serde value (so it round-trips through `invoke`); turn it into an
@@ -159,6 +184,32 @@ mod tests {
             source().live_stream_url("1001", "ts"),
             "http://host:8080/live/user/pass/1001.ts"
         );
+    }
+
+    #[test]
+    fn source_record_round_trips_through_credentials() {
+        let creds = XtreamCredentials {
+            base_url: "http://host:8080".to_string(),
+            username: "user".to_string(),
+            password: "p@ss/word".to_string(),
+        };
+        let record = source_record(&creds).unwrap();
+        // The record keys on the stable account id and tags the kind.
+        assert_eq!(record.id, source().source_id());
+        assert_eq!(record.kind, XTREAM_KIND);
+        // And it recovers the exact credentials.
+        assert_eq!(credentials_from_record(&record).unwrap(), creds);
+    }
+
+    #[test]
+    fn credentials_from_a_bad_record_is_a_storage_error() {
+        let record = SourceRecord {
+            id: "x".to_string(),
+            kind: XTREAM_KIND.to_string(),
+            payload: "not json".to_string(),
+        };
+        let err = credentials_from_record(&record).unwrap_err();
+        assert_eq!(crate::error::AppError::from(err).code, "storage");
     }
 
     #[test]

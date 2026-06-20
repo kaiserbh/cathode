@@ -4,6 +4,7 @@
 //! Dioxus frontend. No global state, no hidden I/O: network and disk are passed in
 //! behind traits so tests can substitute fakes. See AGENTS.md for the rules.
 
+pub mod catalog;
 pub mod error;
 pub mod model;
 pub mod sources;

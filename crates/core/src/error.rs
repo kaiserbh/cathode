@@ -29,6 +29,16 @@ pub enum CoreError {
         /// The underlying transport error, stringified.
         message: String,
     },
+
+    /// A local-storage failure. The concrete catalog (rusqlite, in the shell)
+    /// flattens its own error into a message so no native error type leaks here.
+    #[error("storage error during {context}: {message}")]
+    Storage {
+        /// What we were doing (e.g. "load sources").
+        context: &'static str,
+        /// The underlying storage error, stringified.
+        message: String,
+    },
 }
 
 impl CoreError {
@@ -45,11 +55,20 @@ impl CoreError {
         }
     }
 
+    /// Convenience constructor for a storage failure with context.
+    pub fn storage(context: &'static str, message: impl Into<String>) -> Self {
+        Self::Storage {
+            context,
+            message: message.into(),
+        }
+    }
+
     /// Stable, machine-readable category for this error.
     fn code(&self) -> &'static str {
         match self {
             CoreError::Json { .. } => "parse",
             CoreError::Network { .. } => "network",
+            CoreError::Storage { .. } => "storage",
         }
     }
 }
@@ -96,6 +115,15 @@ mod tests {
         let app: AppError = core.into();
         assert_eq!(app.code, "network");
         assert!(app.message.contains("connection refused"));
+    }
+
+    #[test]
+    fn maps_storage_error_to_storage_code() {
+        let core = CoreError::storage("load sources", "database is locked");
+        let app: AppError = core.into();
+        assert_eq!(app.code, "storage");
+        assert!(app.message.contains("load sources"));
+        assert!(app.message.contains("database is locked"));
     }
 
     #[test]
