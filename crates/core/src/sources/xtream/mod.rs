@@ -6,11 +6,25 @@
 //! caller fetches the bytes and hands them to the parse functions.
 
 pub mod api;
+pub mod fetch;
 pub mod parse;
 
+pub use fetch::{fetch_live_categories, fetch_live_streams};
 pub use parse::{parse_live_categories, parse_live_streams};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use serde::{Deserialize, Serialize};
+
+/// Xtream account credentials as they cross the command boundary from the UI.
+///
+/// A plain serde value (so it round-trips through `invoke`); turn it into an
+/// [`XtreamSource`] with [`XtreamSource::from_credentials`] to get URL building.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct XtreamCredentials {
+    pub base_url: String,
+    pub username: String,
+    pub password: String,
+}
 
 /// A configured Xtream account: where to reach it and how to authenticate.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +48,11 @@ impl XtreamSource {
             username: username.into(),
             password: password.into(),
         }
+    }
+
+    /// Build a source from credentials received across the command boundary.
+    pub fn from_credentials(creds: &XtreamCredentials) -> Self {
+        Self::new(&creds.base_url, &creds.username, &creds.password)
     }
 
     /// A stable identifier for this account, used as the `source_id` half of a
@@ -82,6 +101,22 @@ mod tests {
 
     fn source() -> XtreamSource {
         XtreamSource::new("http://host:8080", "user", "pass")
+    }
+
+    #[test]
+    fn credentials_round_trip_and_build_a_source() {
+        let creds = XtreamCredentials {
+            base_url: "http://host:8080/".to_string(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+        };
+        let json = serde_json::to_string(&creds).unwrap();
+        let back: XtreamCredentials = serde_json::from_str(&json).unwrap();
+        assert_eq!(creds, back);
+
+        // Building through from_credentials applies the same trailing-slash
+        // normalization as new(), so the source id matches.
+        assert_eq!(XtreamSource::from_credentials(&creds), source());
     }
 
     #[test]

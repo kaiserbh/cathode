@@ -17,11 +17,29 @@ pub enum CoreError {
         #[source]
         source: serde_json::Error,
     },
+
+    /// A network/transport failure. The concrete client (reqwest, in the shell)
+    /// flattens its own error into a message so no native error type leaks here.
+    #[error("network error during {context}: {message}")]
+    Network {
+        /// What we were doing (e.g. "live categories request").
+        context: &'static str,
+        /// The underlying transport error, stringified.
+        message: String,
+    },
 }
 
 impl CoreError {
     /// Convenience constructor for a JSON parse failure with context.
     pub fn json(context: &'static str, source: serde_json::Error) -> Self {
         Self::Json { context, source }
+    }
+
+    /// Convenience constructor for a transport failure with context.
+    pub fn network(context: &'static str, message: impl Into<String>) -> Self {
+        Self::Network {
+            context,
+            message: message.into(),
+        }
     }
 }

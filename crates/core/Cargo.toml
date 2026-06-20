@@ -17,4 +17,5 @@ percent-encoding = "2"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [dev-dependencies]
+pollster = "0.4"
 rstest = "0.23"
