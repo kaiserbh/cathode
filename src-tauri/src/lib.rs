@@ -1,16 +1,35 @@
+pub mod catalog_sqlite;
 pub mod commands;
 pub mod http;
 pub mod playback;
 pub mod state;
 
+use std::sync::Arc;
+
+use catalog_sqlite::SqliteCatalog;
+use cathode_core::error::AppError;
 use playback::Player;
-use state::AppState;
+use state::{AppState, CatalogState};
 use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+/// Open the local catalog under the app data directory, creating the directory if
+/// needed. Returns the opened catalog; the caller logs and continues on failure.
+fn open_catalog(app: &tauri::App) -> Result<SqliteCatalog, AppError> {
+    let dir = app.path().app_data_dir().map_err(|e| AppError {
+        code: "storage".to_string(),
+        message: format!("resolve app data dir: {e}"),
+    })?;
+    std::fs::create_dir_all(&dir).map_err(|e| AppError {
+        code: "storage".to_string(),
+        message: format!("create app data dir: {e}"),
+    })?;
+    SqliteCatalog::open(&dir.join("catalog.sqlite")).map_err(AppError::from)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -42,12 +61,27 @@ pub fn run() {
                 }
                 Err(e) => tracing::error!("failed to initialize player: {}", e.message),
             }
+
+            // Open the local catalog (saved sources + cached categories/streams).
+            // On failure the app still runs with caching disabled.
+            let catalog = match open_catalog(app) {
+                Ok(catalog) => Some(Arc::new(catalog)),
+                Err(e) => {
+                    tracing::error!("failed to open catalog: {}", e.message);
+                    None
+                }
+            };
+            app.manage(CatalogState(catalog));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             greet,
             commands::sources::list_categories,
             commands::sources::list_streams,
+            commands::sources::cached_categories,
+            commands::sources::cached_streams,
+            commands::sources::saved_sources,
+            commands::sources::forget_source,
             commands::playback::play_stream,
             commands::playback::pause_playback,
             commands::playback::resume_playback,
