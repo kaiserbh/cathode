@@ -24,6 +24,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 cathode-core = { path = "../crates/core" }
 reqwest = "0.12"
+# Local catalog cache (sources + categories/streams). Bundled so we compile
+# SQLite from source and don't depend on a system libsqlite3.
+rusqlite = { version = "0.32", features = ["bundled"] }
+# `spawn_blocking` for the synchronous catalog calls; runs on Tauri's runtime.
+tokio = { version = "1", features = ["rt"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 # Embedded playback: link libmpv directly and drive it via the render API.
