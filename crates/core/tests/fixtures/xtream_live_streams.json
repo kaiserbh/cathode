@@ -1,0 +1,18 @@
+[
+  {
+    "stream_id": 1001,
+    "name": "BBC News",
+    "stream_icon": "http://logo.example/bbc.png",
+    "category_id": "1"
+  },
+  {
+    "stream_id": "1002",
+    "name": "Sky Sports",
+    "stream_icon": "",
+    "category_id": 2
+  },
+  {
+    "stream_id": 1003,
+    "name": "No Category"
+  }
+]
