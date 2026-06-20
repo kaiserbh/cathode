@@ -24,6 +24,10 @@ pub enum StreamKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stream {
     pub id: StreamId,
+    /// The provider's native id (Xtream `stream_id`), kept so the source can
+    /// resolve a playable URL. This is the one allowed surfacing of source
+    /// asymmetry (AGENTS.md); downstream code still never branches on source.
+    pub provider_id: String,
     pub name: String,
     pub logo: Option<String>,
     pub category_id: Option<CategoryId>,
@@ -32,7 +36,8 @@ pub struct Stream {
 
 impl Stream {
     /// Build a stream, deriving its stable [`StreamId`] from the source id and
-    /// the provider's stable key (for Xtream, the `stream_id`).
+    /// the provider's stable key (for Xtream, the `stream_id`). The same key is
+    /// retained as `provider_id` for URL resolution.
     pub fn new(
         source_id: &str,
         stable_key: &str,
@@ -41,6 +46,7 @@ impl Stream {
     ) -> Self {
         Self {
             id: derive_stream_id(source_id, stable_key),
+            provider_id: stable_key.to_string(),
             name: name.into(),
             logo: None,
             category_id: None,
@@ -64,6 +70,8 @@ mod tests {
             "id must depend on the key, not the display name"
         );
         assert_eq!(a.id, derive_stream_id("src-1", "12345"));
+        // The provider id is retained verbatim for URL resolution.
+        assert_eq!(a.provider_id, "12345");
     }
 
     #[test]

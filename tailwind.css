@@ -2,3 +2,10 @@
 
 /* Scan the Dioxus frontend for class names used in rsx!. */
 @source "./src";
+
+/* The window is transparent so the embedded mpv surface can show through the
+   webview during playback. Opaque panels are drawn by the views themselves. */
+html,
+body {
+    background: transparent;
+}

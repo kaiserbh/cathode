@@ -5,7 +5,7 @@ use cathode_core::model::Stream;
 use dioxus::prelude::*;
 
 #[component]
-pub fn StreamGrid(streams: Vec<Stream>) -> Element {
+pub fn StreamGrid(streams: Vec<Stream>, on_play: EventHandler<Stream>) -> Element {
     if streams.is_empty() {
         return rsx! {
             p { class: "p-6 text-sm text-neutral-500", "No channels to show yet." }
@@ -16,6 +16,7 @@ pub fn StreamGrid(streams: Vec<Stream>) -> Element {
         div {
             class: "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3 p-3",
             {streams.iter().map(|stream| {
+                let played = stream.clone();
                 rsx! {
                     button {
                         key: "{stream.id.0}",
@@ -23,6 +24,7 @@ pub fn StreamGrid(streams: Vec<Stream>) -> Element {
                             bg-neutral-100 dark:bg-neutral-900 \
                             hover:bg-neutral-200 dark:hover:bg-neutral-800 \
                             focus:outline-none focus:ring-2 focus:ring-sky-500",
+                        onclick: move |_| on_play.call(played.clone()),
                         if let Some(logo) = stream.logo.as_ref() {
                             img {
                                 class: "h-16 w-16 object-contain",

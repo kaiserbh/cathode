@@ -4,7 +4,7 @@
 //! `Category` / `Stream`. All provider quirks were already absorbed in `api.rs`.
 
 use crate::error::CoreError;
-use crate::model::{derive_stream_id, Category, CategoryId, Stream, StreamKind};
+use crate::model::{Category, CategoryId, Stream, StreamKind};
 
 use super::api::{RawCategory, RawLiveStream};
 
@@ -32,18 +32,17 @@ pub fn parse_live_streams(json: &str, source_id: &str) -> Result<Vec<Stream>, Co
 
     Ok(raw
         .into_iter()
-        .map(|s| Stream {
-            id: derive_stream_id(source_id, &s.stream_id.0),
-            name: s.name,
+        .map(|s| {
+            let mut stream = Stream::new(source_id, &s.stream_id.0, s.name, StreamKind::Live);
             // An empty icon string is no icon.
-            logo: s.stream_icon.filter(|l| !l.is_empty()),
+            stream.logo = s.stream_icon.filter(|l| !l.is_empty());
             // An empty/absent category is no category.
-            category_id: s
+            stream.category_id = s
                 .category_id
                 .map(|c| c.0)
                 .filter(|c| !c.is_empty())
-                .map(CategoryId),
-            kind: StreamKind::Live,
+                .map(CategoryId);
+            stream
         })
         .collect())
 }

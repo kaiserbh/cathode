@@ -1,0 +1,6 @@
+# The libmpv-wrapper dlopens `libmpv.dylib` by bare name. On Apple Silicon the
+# loader does not search Homebrew's prefix, so mpv init fails. cargo applies this
+# [env] to `cargo run` (which `cargo tauri dev` uses), making libmpv discoverable
+# without a manual DYLD prefix. Harmless on other platforms (the var is ignored).
+[env]
+DYLD_FALLBACK_LIBRARY_PATH = "/opt/homebrew/lib:/usr/local/lib:/usr/lib"

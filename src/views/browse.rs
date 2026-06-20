@@ -7,7 +7,7 @@ use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
 
 use crate::bindings;
-use crate::components::{CategoryList, ConnectForm, StreamGrid};
+use crate::components::{CategoryList, ConnectForm, PlayerOverlay, StreamGrid};
 
 #[component]
 pub fn Browse() -> Element {
@@ -17,6 +17,8 @@ pub fn Browse() -> Element {
     let mut streams = use_signal(Vec::<Stream>::new);
     let mut loading = use_signal(|| false);
     let mut error = use_signal(|| None::<AppError>);
+    let mut playing = use_signal(|| None::<Stream>);
+    let mut paused = use_signal(|| false);
 
     let mut creds_w = creds;
     let on_connect = move |new_creds: XtreamCredentials| {
@@ -52,6 +54,54 @@ pub fn Browse() -> Element {
         });
     };
 
+    let on_play = move |stream: Stream| {
+        let Some(current) = creds.read().clone() else {
+            return;
+        };
+        let provider_id = stream.provider_id.clone();
+        playing.set(Some(stream));
+        paused.set(false);
+        error.set(None);
+        spawn(async move {
+            if let Err(e) = bindings::play_stream(&current, &provider_id).await {
+                error.set(Some(e));
+            }
+        });
+    };
+
+    let on_pause = move |_| {
+        paused.set(true);
+        spawn(async move {
+            let _ = bindings::pause().await;
+        });
+    };
+    let on_resume = move |_| {
+        paused.set(false);
+        spawn(async move {
+            let _ = bindings::resume().await;
+        });
+    };
+    let on_stop = move |_| {
+        playing.set(None);
+        spawn(async move {
+            let _ = bindings::stop().await;
+        });
+    };
+
+    // While playing, render a transparent overlay so the embedded mpv surface
+    // shows through; otherwise render the opaque browse UI.
+    if let Some(stream) = playing() {
+        return rsx! {
+            PlayerOverlay {
+                stream,
+                paused: paused(),
+                on_pause,
+                on_resume,
+                on_stop,
+            }
+        };
+    }
+
     let connected = creds.read().is_some();
 
     rsx! {
@@ -86,7 +136,7 @@ pub fn Browse() -> Element {
                         if loading() {
                             p { class: "p-6 text-sm text-neutral-500", "Loading…" }
                         } else {
-                            StreamGrid { streams: streams() }
+                            StreamGrid { streams: streams(), on_play }
                         }
                     }
                 }

@@ -35,25 +35,48 @@ struct StreamsArgs<'a> {
     category_id: Option<&'a str>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlayArgs<'a> {
+    creds: &'a XtreamCredentials,
+    stream_id: &'a str,
+}
+
+/// Empty args object for commands that take no parameters.
+#[derive(Serialize)]
+struct NoArgs {}
+
+fn encode_args(args: &impl Serialize) -> Result<JsValue, AppError> {
+    serde_wasm_bindgen::to_value(args).map_err(|e| AppError {
+        code: "encode".to_string(),
+        message: e.to_string(),
+    })
+}
+
+fn decode_err(err: JsValue) -> AppError {
+    serde_wasm_bindgen::from_value::<AppError>(err).unwrap_or_else(|_| AppError {
+        code: "unknown".to_string(),
+        message: "the command failed".to_string(),
+    })
+}
+
 /// Invoke a command, encoding args and decoding either the result or the
 /// structured `AppError` from a rejection.
 async fn call<T: DeserializeOwned>(cmd: &str, args: &impl Serialize) -> Result<T, AppError> {
-    let args = serde_wasm_bindgen::to_value(args).map_err(|e| AppError {
-        code: "encode".to_string(),
-        message: e.to_string(),
-    })?;
-
-    match invoke(cmd, args).await {
+    match invoke(cmd, encode_args(args)?).await {
         Ok(value) => serde_wasm_bindgen::from_value(value).map_err(|e| AppError {
             code: "decode".to_string(),
             message: e.to_string(),
         }),
-        Err(err) => Err(
-            serde_wasm_bindgen::from_value::<AppError>(err).unwrap_or_else(|_| AppError {
-                code: "unknown".to_string(),
-                message: "the command failed".to_string(),
-            }),
-        ),
+        Err(err) => Err(decode_err(err)),
+    }
+}
+
+/// Invoke a command that returns no data; only success or a structured error.
+async fn call_unit(cmd: &str, args: &impl Serialize) -> Result<(), AppError> {
+    match invoke(cmd, encode_args(args)?).await {
+        Ok(_) => Ok(()),
+        Err(err) => Err(decode_err(err)),
     }
 }
 
@@ -68,4 +91,21 @@ pub async fn list_streams(
     category_id: Option<&str>,
 ) -> Result<Vec<Stream>, AppError> {
     call("list_streams", &StreamsArgs { creds, category_id }).await
+}
+
+/// Start playing a live stream (by its provider id) in the embedded mpv surface.
+pub async fn play_stream(creds: &XtreamCredentials, stream_id: &str) -> Result<(), AppError> {
+    call_unit("play_stream", &PlayArgs { creds, stream_id }).await
+}
+
+pub async fn pause() -> Result<(), AppError> {
+    call_unit("pause_playback", &NoArgs {}).await
+}
+
+pub async fn resume() -> Result<(), AppError> {
+    call_unit("resume_playback", &NoArgs {}).await
+}
+
+pub async fn stop() -> Result<(), AppError> {
+    call_unit("stop_playback", &NoArgs {}).await
 }
