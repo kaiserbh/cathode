@@ -41,6 +41,10 @@ objc2-app-kit = { version = "0.3", features = [
     "NSResponder",
 ] }
 objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+# Push the GL render onto the main thread from mpv's update callback.
+dispatch2 = "0.3"
+# dlsym(RTLD_DEFAULT, ...) for the mpv render get_proc_address resolver.
+libc = "0.2"
 
 [dev-dependencies]
 wiremock = "0.6"

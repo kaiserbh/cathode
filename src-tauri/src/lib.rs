@@ -23,9 +23,22 @@ pub fn run() {
         .setup(|app| {
             // Create the native playback backend. If mpv is unavailable the rest
             // of the app still runs; playback commands will error until fixed.
-            match Player::new() {
-                Ok(player) => {
-                    app.manage(player);
+            match playback::create_mpv() {
+                Ok(mpv) => {
+                    app.manage(Player::new(mpv));
+
+                    // macOS: attach the native GL surface that video composites
+                    // into, behind the transparent webview, and wire mpv's render
+                    // context to it.
+                    #[cfg(target_os = "macos")]
+                    match app.get_webview_window("main") {
+                        Some(window) => {
+                            if let Err(e) = playback::macos::attach(&window, mpv) {
+                                tracing::error!("failed to attach video surface: {}", e.message);
+                            }
+                        }
+                        None => tracing::error!("no main window to attach video surface"),
+                    }
                 }
                 Err(e) => tracing::error!("failed to initialize player: {}", e.message),
             }
