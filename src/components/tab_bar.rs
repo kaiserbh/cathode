@@ -20,7 +20,7 @@ pub fn TabBar(
 ) -> Element {
     rsx! {
         nav {
-            class: "flex gap-1 border-b border-neutral-200 px-2 dark:border-neutral-800",
+            class: "shrink-0 flex gap-1 border-b border-neutral-200 px-2 dark:border-neutral-800",
             TabButton { label: "Channels", tab: Tab::Channels, active, on_select }
             if show_favorites {
                 TabButton { label: "Favorites", tab: Tab::Favorites, active, on_select }
