@@ -2,5 +2,6 @@
 
 pub mod epg;
 pub mod library;
+pub mod logs;
 pub mod playback;
 pub mod sources;

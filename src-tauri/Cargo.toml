@@ -30,6 +30,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # `spawn_blocking` for the synchronous catalog calls; runs on Tauri's runtime.
 tokio = { version = "1", features = ["rt"] }
 tracing = "0.1"
+# Uses the default features (fmt + registry) plus the always-available `reload` module
+# to flip the capture layer's level filter at runtime (Off disables it).
 tracing-subscriber = "0.3"
 # Embedded playback: link libmpv directly and drive it via the render API.
 libmpv2 = { version = "6", features = ["render"] }
