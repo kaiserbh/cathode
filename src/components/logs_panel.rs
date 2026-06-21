@@ -154,7 +154,8 @@ pub fn LogsPanel(
                             dark:bg-neutral-800",
                         Search { class: "h-4 w-4 shrink-0 text-neutral-400" }
                         input {
-                            class: "w-full bg-transparent text-sm focus:outline-none",
+                            class: "w-full bg-transparent text-sm text-neutral-900 \
+                                placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100",
                             placeholder: "Filter logs…",
                             value: "{query}",
                             oninput: move |e| query.set(e.value()),
