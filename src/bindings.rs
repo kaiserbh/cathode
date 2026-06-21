@@ -6,8 +6,10 @@
 //! argument shapes live in exactly one file. Results and errors are the shared
 //! `cathode_core` types.
 
+use std::collections::HashMap;
+
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, Settings, Stream};
+use cathode_core::model::{Category, NowNext, Settings, Stream};
 use cathode_core::sources::xtream::XtreamCredentials;
 use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::prelude::*;
@@ -198,4 +200,9 @@ pub async fn record_watch(creds: &XtreamCredentials, stream: &Stream) -> Result<
 /// Erase all watch history.
 pub async fn clear_history() -> Result<(), AppError> {
     call_unit("clear_history", &NoArgs {}).await
+}
+
+/// Now/next per channel (keyed by `epg_channel_id`) for an account's XMLTV guide.
+pub async fn epg_now_next(creds: &XtreamCredentials) -> Result<HashMap<String, NowNext>, AppError> {
+    call("epg_now_next", &CategoriesArgs { creds }).await
 }
