@@ -14,7 +14,7 @@ use cathode_core::error::CoreError;
 use cathode_core::model::category::CategoryId;
 use cathode_core::model::id::StreamId;
 use cathode_core::model::{Category, Stream, StreamKind};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 
 /// A `Catalog` backed by a single mutex-guarded SQLite connection.
 pub struct SqliteCatalog {
@@ -49,6 +49,31 @@ fn kind_from_str(s: &str) -> StreamKind {
     }
 }
 
+/// A strictly-increasing stamp for an ordering column (`added_at`/`watched_at`),
+/// robust to several writes landing within the same millisecond. `max_sql` selects
+/// the current max of that column.
+fn next_stamp(conn: &Connection, max_sql: &str) -> Result<i64, CoreError> {
+    let max: i64 = conn
+        .query_row(max_sql, [], |r| r.get(0))
+        .map_err(|e| store("read max stamp", e))?;
+    Ok(unix_millis().max(max + 1))
+}
+
+/// Read a stream snapshot from a favorite/history row selected as
+/// `(stream_id, provider_id, name, logo, kind, category_id)`.
+fn row_to_stream(row: &Row) -> rusqlite::Result<Stream> {
+    let kind: String = row.get(4)?;
+    let category_id: Option<String> = row.get(5)?;
+    Ok(Stream {
+        id: StreamId(row.get(0)?),
+        provider_id: row.get(1)?,
+        name: row.get(2)?,
+        logo: row.get(3)?,
+        category_id: category_id.map(CategoryId),
+        kind: kind_from_str(&kind),
+    })
+}
+
 impl SqliteCatalog {
     /// Open (creating if needed) the catalog at `path` and run migrations.
     pub fn open(path: &Path) -> Result<Self, CoreError> {
@@ -72,10 +97,13 @@ impl SqliteCatalog {
 }
 
 /// Hand-rolled migration keyed on `PRAGMA user_version` (no extra dependency).
+/// Steps run in sequence, so an existing v1 database upgrades to v2 without
+/// touching its v1 tables or data.
 fn migrate(conn: &Connection) -> Result<(), CoreError> {
-    let version: i64 = conn
+    let mut version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(|e| store("read schema version", e))?;
+
     if version < 1 {
         conn.execute_batch(
             "BEGIN;
@@ -104,8 +132,48 @@ fn migrate(conn: &Connection) -> Result<(), CoreError> {
              PRAGMA user_version = 1;
              COMMIT;",
         )
-        .map_err(|e| store("create schema", e))?;
+        .map_err(|e| store("create schema v1", e))?;
+        version = 1;
     }
+
+    if version < 2 {
+        // Settings (global key/value) plus per-source favorites and watch history.
+        // Favorite/history rows store a stream snapshot so they display without the
+        // category cache; `added_at`/`watched_at` order them most-recent-first.
+        conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE setting (
+                 key   TEXT PRIMARY KEY NOT NULL,
+                 value TEXT NOT NULL
+             );
+             CREATE TABLE favorite (
+                 source_id   TEXT NOT NULL,
+                 stream_id   TEXT NOT NULL,
+                 provider_id TEXT NOT NULL,
+                 name        TEXT NOT NULL,
+                 logo        TEXT,
+                 kind        TEXT NOT NULL,
+                 category_id TEXT,
+                 added_at    INTEGER NOT NULL,
+                 PRIMARY KEY (source_id, stream_id)
+             );
+             CREATE TABLE history (
+                 source_id   TEXT NOT NULL,
+                 stream_id   TEXT NOT NULL,
+                 provider_id TEXT NOT NULL,
+                 name        TEXT NOT NULL,
+                 logo        TEXT,
+                 kind        TEXT NOT NULL,
+                 category_id TEXT,
+                 watched_at  INTEGER NOT NULL,
+                 PRIMARY KEY (source_id, stream_id)
+             );
+             PRAGMA user_version = 2;
+             COMMIT;",
+        )
+        .map_err(|e| store("create schema v2", e))?;
+    }
+
     Ok(())
 }
 
@@ -159,6 +227,10 @@ impl Catalog for SqliteCatalog {
             .map_err(|e| store("delete streams", e))?;
         tx.execute("DELETE FROM category WHERE source_id = ?1", params![id])
             .map_err(|e| store("delete categories", e))?;
+        tx.execute("DELETE FROM favorite WHERE source_id = ?1", params![id])
+            .map_err(|e| store("delete favorites", e))?;
+        tx.execute("DELETE FROM history WHERE source_id = ?1", params![id])
+            .map_err(|e| store("delete history", e))?;
         tx.execute("DELETE FROM source WHERE id = ?1", params![id])
             .map_err(|e| store("delete source", e))?;
         tx.commit().map_err(|e| store("commit delete", e))
@@ -268,6 +340,129 @@ impl Catalog for SqliteCatalog {
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| store("read streams", e))
     }
+
+    fn get_setting(&self, key: &str) -> Result<Option<String>, CoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT value FROM setting WHERE key = ?1",
+            params![key],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| store("get setting", e))
+    }
+
+    fn set_setting(&self, key: &str, value: &str) -> Result<(), CoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO setting (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )
+        .map_err(|e| store("set setting", e))?;
+        Ok(())
+    }
+
+    fn add_favorite(&self, source_id: &str, stream: &Stream) -> Result<(), CoreError> {
+        let conn = self.conn.lock().unwrap();
+        let added_at = next_stamp(&conn, "SELECT COALESCE(MAX(added_at), 0) FROM favorite")?;
+        let category_id = stream.category_id.as_ref().map(|c| c.0.clone());
+        conn.execute(
+            "INSERT INTO favorite
+               (source_id, stream_id, provider_id, name, logo, kind, category_id, added_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(source_id, stream_id) DO NOTHING",
+            params![
+                source_id,
+                stream.id.0,
+                stream.provider_id,
+                stream.name,
+                stream.logo,
+                kind_to_str(stream.kind),
+                category_id,
+                added_at,
+            ],
+        )
+        .map_err(|e| store("add favorite", e))?;
+        Ok(())
+    }
+
+    fn remove_favorite(&self, source_id: &str, stream_id: &str) -> Result<(), CoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM favorite WHERE source_id = ?1 AND stream_id = ?2",
+            params![source_id, stream_id],
+        )
+        .map_err(|e| store("remove favorite", e))?;
+        Ok(())
+    }
+
+    fn favorites(&self, source_id: &str) -> Result<Vec<Stream>, CoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT stream_id, provider_id, name, logo, kind, category_id FROM favorite
+                 WHERE source_id = ?1 ORDER BY added_at DESC",
+            )
+            .map_err(|e| store("prepare favorites", e))?;
+        let rows = stmt
+            .query_map(params![source_id], row_to_stream)
+            .map_err(|e| store("query favorites", e))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| store("read favorites", e))
+    }
+
+    fn record_watch(&self, source_id: &str, stream: &Stream) -> Result<(), CoreError> {
+        let conn = self.conn.lock().unwrap();
+        let watched_at = next_stamp(&conn, "SELECT COALESCE(MAX(watched_at), 0) FROM history")?;
+        let category_id = stream.category_id.as_ref().map(|c| c.0.clone());
+        conn.execute(
+            "INSERT INTO history
+               (source_id, stream_id, provider_id, name, logo, kind, category_id, watched_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(source_id, stream_id) DO UPDATE SET
+                 provider_id = excluded.provider_id,
+                 name = excluded.name,
+                 logo = excluded.logo,
+                 kind = excluded.kind,
+                 category_id = excluded.category_id,
+                 watched_at = excluded.watched_at",
+            params![
+                source_id,
+                stream.id.0,
+                stream.provider_id,
+                stream.name,
+                stream.logo,
+                kind_to_str(stream.kind),
+                category_id,
+                watched_at,
+            ],
+        )
+        .map_err(|e| store("record watch", e))?;
+        Ok(())
+    }
+
+    fn history(&self, source_id: &str) -> Result<Vec<Stream>, CoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT stream_id, provider_id, name, logo, kind, category_id FROM history
+                 WHERE source_id = ?1 ORDER BY watched_at DESC",
+            )
+            .map_err(|e| store("prepare history", e))?;
+        let rows = stmt
+            .query_map(params![source_id], row_to_stream)
+            .map_err(|e| store("query history", e))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| store("read history", e))
+    }
+
+    fn clear_history(&self) -> Result<(), CoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM history", [])
+            .map_err(|e| store("clear history", e))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -353,11 +548,112 @@ mod tests {
         .unwrap();
         cat.replace_streams("a", "1", &[Stream::new("a", "9", "Nine", StreamKind::Live)])
             .unwrap();
+        cat.add_favorite("a", &Stream::new("a", "9", "Nine", StreamKind::Live))
+            .unwrap();
+        cat.record_watch("a", &Stream::new("a", "9", "Nine", StreamKind::Live))
+            .unwrap();
 
         cat.delete_source("a").unwrap();
 
         assert!(cat.sources().unwrap().is_empty());
         assert!(cat.categories("a").unwrap().is_empty());
         assert!(cat.streams("a", "1").unwrap().is_empty());
+        assert!(cat.favorites("a").unwrap().is_empty());
+        assert!(cat.history("a").unwrap().is_empty());
+    }
+
+    #[test]
+    fn settings_get_set_round_trip() {
+        let cat = SqliteCatalog::open_in_memory().unwrap();
+        assert_eq!(cat.get_setting("settings").unwrap(), None);
+        cat.set_setting("settings", "{\"favorites_enabled\":false}")
+            .unwrap();
+        assert_eq!(
+            cat.get_setting("settings").unwrap(),
+            Some("{\"favorites_enabled\":false}".to_string())
+        );
+        // Overwrite, not append.
+        cat.set_setting("settings", "{}").unwrap();
+        assert_eq!(cat.get_setting("settings").unwrap(), Some("{}".to_string()));
+    }
+
+    #[test]
+    fn favorites_round_trip_order_and_isolation() {
+        let cat = SqliteCatalog::open_in_memory().unwrap();
+        let one = Stream::new("a", "1", "One", StreamKind::Live);
+        let two = Stream::new("a", "2", "Two", StreamKind::Live);
+        cat.add_favorite("a", &one).unwrap();
+        cat.add_favorite("a", &two).unwrap();
+        cat.add_favorite("a", &one).unwrap(); // idempotent
+
+        let ids: Vec<_> = cat
+            .favorites("a")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(ids, vec![two.id.clone(), one.id.clone()]);
+
+        cat.remove_favorite("a", &two.id.0).unwrap();
+        assert_eq!(cat.favorites("a").unwrap(), vec![one]);
+        assert!(cat.favorites("b").unwrap().is_empty());
+    }
+
+    #[test]
+    fn history_records_dedupes_orders_and_clears() {
+        let cat = SqliteCatalog::open_in_memory().unwrap();
+        let one = Stream::new("a", "1", "One", StreamKind::Live);
+        let two = Stream::new("a", "2", "Two", StreamKind::Live);
+        cat.record_watch("a", &one).unwrap();
+        cat.record_watch("a", &two).unwrap();
+        cat.record_watch("a", &one).unwrap(); // re-watch -> front, no dup
+
+        let ids: Vec<_> = cat
+            .history("a")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(ids, vec![one.id.clone(), two.id.clone()]);
+
+        cat.clear_history().unwrap();
+        assert!(cat.history("a").unwrap().is_empty());
+    }
+
+    #[test]
+    fn v1_database_upgrades_to_v2_without_data_loss() {
+        // Build a v1 database by hand (the pre-library schema) with one source row.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE source (
+                 id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL,
+                 payload TEXT NOT NULL, last_used_at INTEGER NOT NULL
+             );
+             CREATE TABLE category (
+                 source_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
+                 PRIMARY KEY (source_id, id)
+             );
+             CREATE TABLE stream (
+                 source_id TEXT NOT NULL, category_id TEXT NOT NULL, stream_id TEXT NOT NULL,
+                 provider_id TEXT NOT NULL, name TEXT NOT NULL, logo TEXT, kind TEXT NOT NULL,
+                 PRIMARY KEY (source_id, category_id, stream_id)
+             );
+             INSERT INTO source VALUES ('a', 'xtream', '{}', 1);
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+
+        // Migrating brings it to v2: old data survives and the new features work.
+        let cat = SqliteCatalog::from_connection(conn).unwrap();
+        assert_eq!(
+            cat.sources().unwrap().len(),
+            1,
+            "v1 source row must survive"
+        );
+        cat.add_favorite("a", &Stream::new("a", "1", "One", StreamKind::Live))
+            .unwrap();
+        assert_eq!(cat.favorites("a").unwrap().len(), 1);
+        cat.set_setting("k", "v").unwrap();
+        assert_eq!(cat.get_setting("k").unwrap(), Some("v".to_string()));
     }
 }

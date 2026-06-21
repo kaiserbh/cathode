@@ -20,11 +20,11 @@ use tracing::{info_span, Instrument};
 use crate::state::{AppState, CatalogState};
 
 /// The stable catalog key for an account.
-fn source_id(creds: &XtreamCredentials) -> String {
+pub(crate) fn source_id(creds: &XtreamCredentials) -> String {
     XtreamSource::from_credentials(creds).source_id()
 }
 
-fn join_err(e: task::JoinError) -> AppError {
+pub(crate) fn join_err(e: task::JoinError) -> AppError {
     AppError {
         code: "storage".to_string(),
         message: format!("background task failed: {e}"),
