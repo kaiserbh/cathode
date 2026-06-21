@@ -55,6 +55,21 @@ dispatch2 = "0.3"
 # dlsym(RTLD_DEFAULT, ...) for the mpv render get_proc_address resolver.
 libc = "0.2"
 
+# Windows: own a child window behind the transparent WebView2 and drive mpv's GL
+# render API through an ANGLE (EGL -> D3D11) context. `windows` is pinned to the
+# version wry/tao already pull in so it isn't compiled twice.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_System_LibraryLoader",
+] }
+# Drive ANGLE's libEGL.dll at runtime without import libraries (the `dynamic`
+# feature pulls in libloading internally).
+khronos-egl = { version = "6", features = ["dynamic"] }
+
 [dev-dependencies]
 wiremock = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

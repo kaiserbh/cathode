@@ -86,6 +86,18 @@ pub fn run() {
                         }
                         None => tracing::error!("no main window to attach video surface"),
                     }
+
+                    // Windows: child window behind the transparent WebView2, fed by mpv's
+                    // render API through an ANGLE (EGL -> D3D11) GL context.
+                    #[cfg(target_os = "windows")]
+                    match app.get_webview_window("main") {
+                        Some(window) => {
+                            if let Err(e) = playback::windows::attach(&window, mpv) {
+                                tracing::error!("failed to attach video surface: {}", e.message);
+                            }
+                        }
+                        None => tracing::error!("no main window to attach video surface"),
+                    }
                 }
                 Err(e) => tracing::error!("failed to initialize player: {}", e.message),
             }

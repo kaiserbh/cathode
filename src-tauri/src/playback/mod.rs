@@ -9,6 +9,9 @@
 #[cfg(target_os = "macos")]
 pub mod macos;
 
+#[cfg(target_os = "windows")]
+pub mod windows;
+
 use cathode_core::error::AppError;
 use libmpv2::Mpv;
 
