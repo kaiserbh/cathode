@@ -10,7 +10,7 @@ fn icon(class: String, path: &'static str) -> Element {
             view_box: "0 0 24 24",
             fill: "currentColor",
             xmlns: "http://www.w3.org/2000/svg",
-            path { d: "{path}" }
+            path { d: path }
         }
     }
 }

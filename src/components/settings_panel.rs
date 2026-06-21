@@ -136,7 +136,7 @@ fn ViewButton(
         button {
             class: "rounded-md px-3 py-1 text-sm font-medium focus:outline-none {state}",
             onclick: move |_| on_set_view.call(view),
-            "{label}"
+            {label}
         }
     }
 }
@@ -152,8 +152,8 @@ fn ToggleRow(
         div {
             class: "flex items-center justify-between px-5 py-4",
             div {
-                span { class: "block text-sm font-medium", "{label}" }
-                span { class: "block text-xs text-neutral-500", "{description}" }
+                span { class: "block text-sm font-medium", {label} }
+                span { class: "block text-xs text-neutral-500", {description} }
             }
             Toggle { value, on_toggle }
         }

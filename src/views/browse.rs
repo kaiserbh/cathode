@@ -68,10 +68,11 @@ pub fn Browse() -> Element {
 
         let cached_creds = new_creds.clone();
         spawn(async move {
-            if let Ok(cached) = bindings::cached_categories(&cached_creds).await {
-                if !cached.is_empty() && categories.read().is_empty() {
-                    categories.set(cached);
-                }
+            if let Ok(cached) = bindings::cached_categories(&cached_creds).await
+                && !cached.is_empty()
+                && categories.read().is_empty()
+            {
+                categories.set(cached);
             }
         });
 
@@ -146,10 +147,11 @@ pub fn Browse() -> Element {
     // Load timeline programmes whenever the Guide view is active (and EPG is on).
     use_effect(move || {
         let s = settings();
-        if s.epg_enabled && s.channel_view == ChannelView::Guide {
-            if let Some(current) = creds.read().clone() {
-                load_programmes.call(current);
-            }
+        if s.epg_enabled
+            && s.channel_view == ChannelView::Guide
+            && let Some(current) = creds.read().clone()
+        {
+            load_programmes.call(current);
         }
     });
 
@@ -258,7 +260,7 @@ pub fn Browse() -> Element {
         error.set(None);
 
         let play_creds = current.clone();
-        let s = settings.read().clone();
+        let s = *settings.read();
         spawn(async move {
             if let Err(e) = bindings::play_stream(&play_creds, &provider_id).await {
                 error.set(Some(e));
@@ -577,7 +579,7 @@ fn HeaderButton(label: String, onclick: EventHandler<MouseEvent>) -> Element {
                 hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-sky-400 \
                 dark:border-neutral-700 dark:hover:bg-neutral-800",
             onclick: move |e| onclick.call(e),
-            "{label}"
+            {label}
         }
     }
 }
