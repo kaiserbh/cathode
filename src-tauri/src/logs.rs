@@ -93,17 +93,13 @@ impl<S: Subscriber> Layer<S> for CaptureLayer {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
         let mut visitor = EventVisitor::default();
         event.record(&mut visitor);
-        let message = match (visitor.message.is_empty(), visitor.fields.is_empty()) {
-            (true, _) => visitor.fields,
-            (false, true) => visitor.message,
-            (false, false) => format!("{} {}", visitor.message, visitor.fields),
-        };
         let meta = event.metadata();
         self.store.push(LogLine {
             time: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
             level: meta.level().to_string().to_lowercase(),
             target: meta.target().to_string(),
-            message: redact::secrets(&message),
+            message: redact::secrets(&visitor.message),
+            fields: redact::secrets(&visitor.fields),
         });
     }
 }
