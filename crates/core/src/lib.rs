@@ -8,5 +8,6 @@ pub mod catalog;
 pub mod epg;
 pub mod error;
 pub mod model;
+pub mod redact;
 pub mod sources;
 pub mod transport;

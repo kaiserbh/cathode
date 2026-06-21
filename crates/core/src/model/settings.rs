@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::LogLevel;
+
 /// How the channel list is laid out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -36,6 +38,8 @@ pub struct Settings {
     pub volume: u8,
     /// Whether playback is muted.
     pub muted: bool,
+    /// Debug logging verbosity. `Off` (the default) disables capture entirely.
+    pub log_level: LogLevel,
 }
 
 impl Default for Settings {
@@ -47,6 +51,7 @@ impl Default for Settings {
             channel_view: ChannelView::Grid,
             volume: 100,
             muted: false,
+            log_level: LogLevel::Off,
         }
     }
 }
@@ -64,6 +69,7 @@ mod tests {
         assert_eq!(s.channel_view, ChannelView::Grid);
         assert_eq!(s.volume, 100);
         assert!(!s.muted);
+        assert_eq!(s.log_level, LogLevel::Off);
     }
 
     #[test]
@@ -75,6 +81,7 @@ mod tests {
             channel_view: ChannelView::List,
             volume: 42,
             muted: true,
+            log_level: LogLevel::Debug,
         };
         let json = serde_json::to_string(&s).unwrap();
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), s);
@@ -104,5 +111,6 @@ mod tests {
         assert_eq!(partial.channel_view, ChannelView::Grid);
         assert_eq!(partial.volume, 100);
         assert!(!partial.muted);
+        assert_eq!(partial.log_level, LogLevel::Off);
     }
 }
