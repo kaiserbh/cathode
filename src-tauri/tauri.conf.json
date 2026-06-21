@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "cathode",
+  "productName": "Cathode",
   "version": "0.1.0",
   "identifier": "com.kaiserbh.cathode",
   "build": {
@@ -14,9 +14,11 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "cathode",
+        "title": "Cathode",
         "width": 1280,
-        "height": 720,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
         "transparent": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true
