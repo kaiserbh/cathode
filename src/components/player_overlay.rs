@@ -146,8 +146,8 @@ pub fn PlayerOverlay(
                 div {
                     class: "pointer-events-none absolute inset-0 flex items-center justify-center",
                     div {
-                        class: "flex flex-col items-center gap-1 rounded-2xl bg-black/70 px-7 py-6 \
-                            text-white backdrop-blur-sm",
+                        class: "flex w-28 flex-col items-center gap-1 rounded-2xl bg-black/40 \
+                            py-6 text-white backdrop-blur-sm",
                         {match h {
                             Hud::Volume(_) => rsx! { VolumeHigh { class: HUD_ICON } },
                             Hud::Muted => rsx! { VolumeMuted { class: HUD_ICON } },
@@ -155,7 +155,10 @@ pub fn PlayerOverlay(
                             Hud::Paused => rsx! { Pause { class: HUD_ICON } },
                         }}
                         if let Hud::Volume(v) = h {
-                            span { class: "text-lg font-semibold", "{v}%" }
+                            span {
+                                class: "w-full text-center text-lg font-semibold tabular-nums",
+                                "{v}%"
+                            }
                         }
                     }
                 }
