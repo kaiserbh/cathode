@@ -42,7 +42,7 @@ pub fn StreamGrid(
                             if let Some(logo) = stream.logo.as_ref() {
                                 img {
                                     class: "h-16 w-16 object-contain",
-                                    src: "{logo}",
+                                    src: logo.as_str(),
                                     alt: "{stream.name}",
                                 }
                             } else {

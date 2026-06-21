@@ -44,7 +44,7 @@ fn TabButton(label: String, tab: Tab, active: Tab, on_select: EventHandler<Tab>)
         button {
             class: "border-b-2 px-3 py-2 text-sm font-medium focus:outline-none {state}",
             onclick: move |_| on_select.call(tab),
-            "{label}"
+            {label}
         }
     }
 }

@@ -44,7 +44,7 @@ pub fn ChannelList(
                             if let Some(logo) = stream.logo.as_ref() {
                                 img {
                                     class: "h-10 w-10 shrink-0 object-contain",
-                                    src: "{logo}",
+                                    src: logo.as_str(),
                                     alt: "{stream.name}",
                                 }
                             } else {
