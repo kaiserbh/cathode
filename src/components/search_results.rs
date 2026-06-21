@@ -36,8 +36,8 @@ pub fn SearchResults(
             onclick: move |_| on_close.call(()),
             div {
                 class: "absolute left-1/2 top-10 max-h-[70vh] w-full max-w-xl -translate-x-1/2 \
-                    overflow-y-auto rounded-xl border border-neutral-200 bg-white shadow-xl \
-                    dark:border-neutral-800 dark:bg-neutral-900",
+                    overflow-y-auto rounded-xl border border-neutral-200 bg-white text-neutral-900 \
+                    shadow-xl dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100",
                 onclick: move |e| e.stop_propagation(),
                 if results.is_empty() {
                     p {

@@ -114,6 +114,15 @@ pub fn Check(class: String) -> Element {
 }
 
 #[component]
+pub fn Category(class: String) -> Element {
+    icon(
+        class,
+        "M12 2l-5.5 9h11L12 2zm5.5 9.5c-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5 4.5-2.01 \
+         4.5-4.5-2.01-4.5-4.5-4.5zM3 21.5h8v-8H3v8z",
+    )
+}
+
+#[component]
 pub fn Tv(class: String) -> Element {
     icon(
         class,
