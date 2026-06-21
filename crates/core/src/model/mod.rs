@@ -6,10 +6,12 @@
 
 pub mod category;
 pub mod id;
+pub mod programme;
 pub mod settings;
 pub mod stream;
 
 pub use category::{Category, CategoryId};
 pub use id::{derive_stream_id, StreamId};
+pub use programme::{NowNext, Programme};
 pub use settings::Settings;
 pub use stream::{Stream, StreamKind};

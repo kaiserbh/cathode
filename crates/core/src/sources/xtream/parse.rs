@@ -42,7 +42,27 @@ pub fn parse_live_streams(json: &str, source_id: &str) -> Result<Vec<Stream>, Co
                 .map(|c| c.0)
                 .filter(|c| !c.is_empty())
                 .map(CategoryId);
+            // An empty epg id means no EPG mapping for this channel.
+            stream.epg_channel_id = s.epg_channel_id.filter(|e| !e.is_empty());
             stream
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_epg_channel_id_and_treats_empty_as_none() {
+        let json = r#"[
+            {"stream_id": 1, "name": "A", "epg_channel_id": "bbc1.uk"},
+            {"stream_id": 2, "name": "B", "epg_channel_id": ""},
+            {"stream_id": 3, "name": "C"}
+        ]"#;
+        let streams = parse_live_streams(json, "src-1").unwrap();
+        assert_eq!(streams[0].epg_channel_id.as_deref(), Some("bbc1.uk"));
+        assert_eq!(streams[1].epg_channel_id, None, "empty string -> None");
+        assert_eq!(streams[2].epg_channel_id, None, "absent -> None");
+    }
 }

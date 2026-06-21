@@ -3,7 +3,7 @@
 //! This is the heart of the shared contract: every source (Xtream today, M3U
 //! later) maps onto this one shape, and the UI consumes it directly. It carries
 //! no provider-specific fields. How to turn a stream into a playable URL depends
-//! on the source and is modelled separately in a later increment, not here.
+//! on the source and is modelled there (e.g. `XtreamSource`), not here.
 
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,9 @@ pub struct Stream {
     pub logo: Option<String>,
     pub category_id: Option<CategoryId>,
     pub kind: StreamKind,
+    /// The channel's EPG id (Xtream `epg_channel_id` / XMLTV `tvg-id`), used to
+    /// match guide programmes. Independent of the stable [`StreamId`].
+    pub epg_channel_id: Option<String>,
 }
 
 impl Stream {
@@ -51,6 +54,7 @@ impl Stream {
             logo: None,
             category_id: None,
             kind,
+            epg_channel_id: None,
         }
     }
 }
@@ -80,6 +84,7 @@ mod tests {
         let mut stream = Stream::new("src-1", "12345", "BBC One", StreamKind::Live);
         stream.logo = Some("http://logo.example/bbc.png".to_string());
         stream.category_id = Some(CategoryId("5".to_string()));
+        stream.epg_channel_id = Some("bbc1.uk".to_string());
 
         let json = serde_json::to_string(&stream).unwrap();
         let back: Stream = serde_json::from_str(&json).unwrap();

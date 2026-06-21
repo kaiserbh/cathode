@@ -48,6 +48,9 @@ pub struct RawLiveStream {
     pub stream_icon: Option<String>,
     #[serde(default)]
     pub category_id: Option<FlexStr>,
+    /// The channel's EPG id (tvg-id); absent or empty on many providers.
+    #[serde(default)]
+    pub epg_channel_id: Option<String>,
 }
 
 #[cfg(test)]
