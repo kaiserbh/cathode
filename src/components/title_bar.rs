@@ -44,10 +44,9 @@ pub fn TitleBar(
                     })()"#,
                 );
             },
-            // Left spacer: reserves space for the native macOS traffic-light buttons
-            // (~72 px). Without it the only "free" drag area is directly behind the
-            // close/minimize/zoom controls, which receive native events first.
-            div { class: "w-[72px] shrink-0" }
+            // Left spacer: covers the native macOS traffic-light buttons (~72 px) plus
+            // an extra margin so there is visible drag area to their right.
+            div { class: "w-28 shrink-0" }
             // Centered search; the surrounding empty space stays draggable.
             div { class: "flex flex-1 justify-center",
                 div {
