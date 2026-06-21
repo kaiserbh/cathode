@@ -95,7 +95,10 @@ pub fn run() {
             commands::playback::play_stream,
             commands::playback::pause_playback,
             commands::playback::resume_playback,
-            commands::playback::stop_playback
+            commands::playback::stop_playback,
+            commands::playback::set_volume,
+            commands::playback::set_mute,
+            commands::playback::toggle_fullscreen
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

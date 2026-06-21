@@ -37,3 +37,27 @@ pub fn resume_playback(player: State<'_, Player>) -> Result<(), AppError> {
 pub fn stop_playback(player: State<'_, Player>) -> Result<(), AppError> {
     player.stop()
 }
+
+#[tauri::command]
+pub fn set_volume(player: State<'_, Player>, volume: u8) -> Result<(), AppError> {
+    player.set_volume(volume.min(100) as f64)
+}
+
+#[tauri::command]
+pub fn set_mute(player: State<'_, Player>, muted: bool) -> Result<(), AppError> {
+    player.set_mute(muted)
+}
+
+/// Toggle the main window's fullscreen, returning the new state.
+#[tauri::command]
+pub fn toggle_fullscreen(window: tauri::WebviewWindow) -> Result<bool, AppError> {
+    let fullscreen = !window.is_fullscreen().map_err(|e| AppError {
+        code: "playback".to_string(),
+        message: format!("read fullscreen: {e}"),
+    })?;
+    window.set_fullscreen(fullscreen).map_err(|e| AppError {
+        code: "playback".to_string(),
+        message: format!("set fullscreen: {e}"),
+    })?;
+    Ok(fullscreen)
+}
