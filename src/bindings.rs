@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, NowNext, Programme, Settings, Stream};
+use cathode_core::model::{Category, LogLevel, NowNext, Programme, Settings, Stream};
 use cathode_core::sources::xtream::XtreamCredentials;
 use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::prelude::*;
@@ -249,4 +249,25 @@ pub async fn epg_programmes(
     to: i64,
 ) -> Result<HashMap<String, Vec<Programme>>, AppError> {
     call("epg_programmes", &ProgrammesArgs { creds, from, to }).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LogLevelArgs {
+    level: LogLevel,
+}
+
+/// The captured debug-log lines, oldest first.
+pub async fn get_logs() -> Result<Vec<String>, AppError> {
+    call("get_logs", &NoArgs {}).await
+}
+
+/// Drop all captured log lines.
+pub async fn clear_logs() -> Result<(), AppError> {
+    call_unit("clear_logs", &NoArgs {}).await
+}
+
+/// Set the live capture level (`Off` disables capture).
+pub async fn set_log_level(level: LogLevel) -> Result<(), AppError> {
+    call_unit("set_log_level", &LogLevelArgs { level }).await
 }

@@ -1,5 +1,6 @@
 mod app;
 mod bindings;
+mod clipboard;
 mod components;
 mod epg;
 mod format;
