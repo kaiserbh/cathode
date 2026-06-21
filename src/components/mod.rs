@@ -6,6 +6,7 @@ pub mod channel_list;
 pub mod channel_pane;
 pub mod connect_form;
 pub mod epg_guide;
+pub mod icons;
 pub mod player_overlay;
 pub mod settings_panel;
 pub mod sources_panel;

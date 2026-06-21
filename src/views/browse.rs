@@ -51,6 +51,7 @@ pub fn Browse() -> Element {
     let mut programmes = use_signal(HashMap::<String, Vec<Programme>>::new);
     let mut guide_from = use_signal(|| 0i64);
     let mut guide_to = use_signal(|| 0i64);
+    let mut fullscreen = use_signal(|| false);
 
     // Make a source active: paint its cached channels instantly, refresh from the
     // network, and load its favorites + history.
@@ -257,10 +258,15 @@ pub fn Browse() -> Element {
         error.set(None);
 
         let play_creds = current.clone();
+        let s = settings.read().clone();
         spawn(async move {
             if let Err(e) = bindings::play_stream(&play_creds, &provider_id).await {
                 error.set(Some(e));
+                return;
             }
+            // Apply the persisted volume/mute so a fresh session honours them.
+            let _ = bindings::set_volume(s.volume).await;
+            let _ = bindings::set_mute(s.muted).await;
         });
 
         // Record to history only when enabled and not incognito.
@@ -293,31 +299,13 @@ pub fn Browse() -> Element {
         }
     });
 
-    let on_pause = move |_| {
-        paused.set(true);
-        spawn(async move {
-            let _ = bindings::pause().await;
-        });
-    };
-    let on_resume = move |_| {
-        paused.set(false);
-        spawn(async move {
-            let _ = bindings::resume().await;
-        });
-    };
-    let on_stop = move |_| {
-        playing.set(None);
-        spawn(async move {
-            let _ = bindings::stop().await;
-        });
-    };
-
     // While playing, render a transparent overlay so the embedded mpv surface
     // shows through; otherwise render the opaque browse UI.
     if let Some(stream) = playing() {
+        let s = settings();
         // Show the playing channel's now/next when EPG is on and we have a match
         // (by epg_channel_id or, failing that, by normalized name).
-        let now_next = if settings().epg_enabled {
+        let now_next = if s.epg_enabled {
             crate::epg::resolve(&epg.read(), &stream).cloned()
         } else {
             None
@@ -327,9 +315,50 @@ pub fn Browse() -> Element {
                 stream,
                 paused: paused(),
                 now_next,
-                on_pause,
-                on_resume,
-                on_stop,
+                volume: s.volume,
+                muted: s.muted,
+                fullscreen: fullscreen(),
+                on_toggle_pause: move |_| {
+                    let now_paused = !paused();
+                    paused.set(now_paused);
+                    spawn(async move {
+                        let _ = if now_paused {
+                            bindings::pause().await
+                        } else {
+                            bindings::resume().await
+                        };
+                    });
+                },
+                on_stop: move |_| {
+                    playing.set(None);
+                    spawn(async move {
+                        let _ = bindings::stop().await;
+                    });
+                },
+                on_set_volume: move |v: u8| {
+                    let mut s = settings();
+                    s.volume = v;
+                    save_settings.call(s);
+                    spawn(async move {
+                        let _ = bindings::set_volume(v).await;
+                    });
+                },
+                on_toggle_mute: move |_| {
+                    let mut s = settings();
+                    s.muted = !s.muted;
+                    let muted = s.muted;
+                    save_settings.call(s);
+                    spawn(async move {
+                        let _ = bindings::set_mute(muted).await;
+                    });
+                },
+                on_toggle_fullscreen: move |_| {
+                    spawn(async move {
+                        if let Ok(fs) = bindings::toggle_fullscreen().await {
+                            fullscreen.set(fs);
+                        }
+                    });
+                },
             }
         };
     }
