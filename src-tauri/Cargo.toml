@@ -31,8 +31,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tokio = { version = "1", features = ["rt"] }
 tracing = "0.1"
 # Uses the default features (fmt + registry) plus the always-available `reload` module
-# to flip the capture layer's level filter at runtime (Off disables it).
+# to flip the capture layer's target filter at runtime (Off disables it).
 tracing-subscriber = "0.3"
+# Local wall-clock timestamps for captured log lines (core's chrono is clock-less).
+chrono = "0.4"
 # Embedded playback: link libmpv directly and drive it via the render API.
 libmpv2 = { version = "6", features = ["render"] }
 raw-window-handle = "0.6"

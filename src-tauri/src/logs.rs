@@ -1,29 +1,31 @@
-//! In-memory capture of `tracing` output for the debug Logs panel.
+//! In-memory capture of `tracing` events for the debug Logs panel.
 //!
-//! A bounded ring buffer holds the most recent formatted log lines. A `tracing` fmt
-//! layer writes into it through [`LogStore`] (each line re-run through
-//! [`cathode_core::redact`] as a safety net so no credential survives), gated by a
-//! level filter that [`LogControl`] flips at runtime. The user picks the level (`Off`
-//! disables capture entirely, with no overhead); the choice is persisted in `Settings`
-//! and applied on launch by the frontend.
+//! A bounded ring buffer holds the most recent events as structured [`LogLine`]s
+//! (time, level, target, message) rather than pre-formatted text — so the UI can color
+//! and align them, and so no ANSI escapes or span-field noise leak in. A custom layer
+//! feeds the buffer, gated by a [`Targets`] filter that [`LogControl`] swaps at runtime:
+//! capture is scoped to Cathode's own crates (dependency spam like hyper/reqwest/tao is
+//! excluded), and `Off` captures nothing. The message is credential-redacted.
 
 use std::collections::VecDeque;
-use std::io;
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
-use cathode_core::model::LogLevel;
+use cathode_core::model::{LogLevel, LogLine};
 use cathode_core::redact;
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::fmt::MakeWriter;
+use tracing::field::{Field, Visit};
+use tracing::{Event, Subscriber};
+use tracing_subscriber::filter::{LevelFilter, Targets};
+use tracing_subscriber::layer::{Context, Layer};
 
 /// How many recent log lines to retain.
 const CAPACITY: usize = 1000;
 
-/// A bounded, shared ring buffer of captured log lines. Cheap to clone (it is just an
-/// `Arc`), so the same store backs both the tracing writer and the `get_logs` command.
+/// A bounded, shared ring buffer of captured log lines. Cheap to clone (just an `Arc`),
+/// so the same store backs both the capture layer and the `get_logs` command.
 #[derive(Clone, Default)]
 pub struct LogStore {
-    buf: Arc<Mutex<VecDeque<String>>>,
+    buf: Arc<Mutex<VecDeque<LogLine>>>,
 }
 
 impl LogStore {
@@ -32,7 +34,7 @@ impl LogStore {
     }
 
     /// The captured lines, oldest first.
-    pub fn snapshot(&self) -> Vec<String> {
+    pub fn snapshot(&self) -> Vec<LogLine> {
         self.buf
             .lock()
             .map(|b| b.iter().cloned().collect())
@@ -46,7 +48,7 @@ impl LogStore {
         }
     }
 
-    fn push_line(&self, line: String) {
+    fn push(&self, line: LogLine) {
         if let Ok(mut b) = self.buf.lock() {
             if b.len() >= CAPACITY {
                 b.pop_front();
@@ -56,63 +58,77 @@ impl LogStore {
     }
 }
 
-/// The per-event sink the fmt layer writes one formatted event into. On drop it splits
-/// the buffered bytes into lines, redacts each, and appends them to the store.
-pub struct LogWriter {
-    store: LogStore,
-    buf: Vec<u8>,
+/// Collects an event's message and any extra fields into displayable strings.
+#[derive(Default)]
+struct EventVisitor {
+    message: String,
+    fields: String,
 }
 
-impl io::Write for LogWriter {
-    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
-        self.buf.extend_from_slice(data);
-        Ok(data.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl Drop for LogWriter {
-    fn drop(&mut self) {
-        if self.buf.is_empty() {
-            return;
-        }
-        let text = String::from_utf8_lossy(&self.buf);
-        for line in text.lines() {
-            if !line.is_empty() {
-                self.store.push_line(redact::secrets(line));
+impl Visit for EventVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        if field.name() == "message" {
+            self.message = format!("{value:?}");
+        } else {
+            if !self.fields.is_empty() {
+                self.fields.push(' ');
             }
+            self.fields.push_str(&format!("{}={value:?}", field.name()));
         }
     }
 }
 
-impl<'a> MakeWriter<'a> for LogStore {
-    type Writer = LogWriter;
+/// A `tracing` layer that turns each event into a [`LogLine`] and stores it.
+pub struct CaptureLayer {
+    store: LogStore,
+}
 
-    fn make_writer(&'a self) -> Self::Writer {
-        LogWriter {
-            store: self.clone(),
-            buf: Vec::new(),
-        }
+impl CaptureLayer {
+    pub fn new(store: LogStore) -> Self {
+        Self { store }
     }
 }
 
-/// Map the user-facing [`LogLevel`] onto a tracing level filter. `Off` disables capture.
-pub fn level_filter(level: LogLevel) -> LevelFilter {
-    match level {
-        LogLevel::Off => LevelFilter::OFF,
+impl<S: Subscriber> Layer<S> for CaptureLayer {
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        let mut visitor = EventVisitor::default();
+        event.record(&mut visitor);
+        let message = match (visitor.message.is_empty(), visitor.fields.is_empty()) {
+            (true, _) => visitor.fields,
+            (false, true) => visitor.message,
+            (false, false) => format!("{} {}", visitor.message, visitor.fields),
+        };
+        let meta = event.metadata();
+        self.store.push(LogLine {
+            time: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+            level: meta.level().to_string().to_lowercase(),
+            target: meta.target().to_string(),
+            message: redact::secrets(&message),
+        });
+    }
+}
+
+/// The capture filter for a level: scoped to Cathode's own crates so dependency
+/// internals (hyper/reqwest/tao) don't flood the buffer. `Off` captures nothing;
+/// other crates are capped at WARN so their genuine warnings/errors still surface.
+pub fn targets(level: LogLevel) -> Targets {
+    let lf = match level {
+        LogLevel::Off => return Targets::new(),
         LogLevel::Error => LevelFilter::ERROR,
         LogLevel::Warn => LevelFilter::WARN,
         LogLevel::Info => LevelFilter::INFO,
         LogLevel::Debug => LevelFilter::DEBUG,
         LogLevel::Trace => LevelFilter::TRACE,
-    }
+    };
+    Targets::new()
+        .with_target("cathode", lf)
+        .with_target("cathode_lib", lf)
+        .with_target("cathode_core", lf)
+        .with_default(LevelFilter::WARN)
 }
 
-/// A runtime switch for the capture layer's level. Wraps the boxed reload closure so
-/// the (verbose) tracing handle type never leaks into the managed-state signature.
+/// A runtime switch for the capture filter. Wraps the boxed reload closure so the
+/// (verbose) tracing handle type never leaks into the managed-state signature.
 pub struct LogControl {
     set: Box<dyn Fn(LogLevel) + Send + Sync>,
 }
