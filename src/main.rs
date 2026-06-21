@@ -1,6 +1,7 @@
 mod app;
 mod bindings;
 mod components;
+mod epg;
 mod format;
 mod views;
 
