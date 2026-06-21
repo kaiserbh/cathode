@@ -9,6 +9,7 @@ pub mod id;
 pub mod log_level;
 pub mod log_line;
 pub mod programme;
+pub mod series;
 pub mod settings;
 pub mod stream;
 
@@ -17,5 +18,6 @@ pub use id::{derive_stream_id, StreamId};
 pub use log_level::LogLevel;
 pub use log_line::LogLine;
 pub use programme::{NowNext, Programme};
+pub use series::{Episode, Season, SeriesInfo};
 pub use settings::{ChannelView, Settings};
 pub use stream::{Stream, StreamKind};

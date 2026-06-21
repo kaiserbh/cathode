@@ -12,7 +12,7 @@ use crate::model::id::{derive_stream_id, StreamId};
 
 /// What kind of content a stream is. Xtream separates its catalog into these
 /// three classes; we keep the distinction so the UI can route each correctly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StreamKind {
     Live,
@@ -35,6 +35,9 @@ pub struct Stream {
     /// The channel's EPG id (Xtream `epg_channel_id` / XMLTV `tvg-id`), used to
     /// match guide programmes. Independent of the stable [`StreamId`].
     pub epg_channel_id: Option<String>,
+    /// The playable file extension (Xtream `container_extension`, e.g. `mp4`/`mkv`)
+    /// for VOD and series episodes. `None` for Live (which always plays `.ts`).
+    pub container_extension: Option<String>,
 }
 
 impl Stream {
@@ -55,6 +58,7 @@ impl Stream {
             category_id: None,
             kind,
             epg_channel_id: None,
+            container_extension: None,
         }
     }
 }
