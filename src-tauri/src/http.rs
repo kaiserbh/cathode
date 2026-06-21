@@ -36,6 +36,7 @@ impl ReqwestTransport {
 
 impl Transport for ReqwestTransport {
     fn get_text(&self, url: &str) -> impl Future<Output = Result<String, CoreError>> + Send {
+        tracing::debug!(url = %redact::secrets(url), "xtream GET");
         // Build the request before the async block so the future owns no borrow
         // of `url` or `self` beyond the client clone.
         let request = self.client.get(url).send();

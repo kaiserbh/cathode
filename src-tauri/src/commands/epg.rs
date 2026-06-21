@@ -45,11 +45,22 @@ async fn ensure_guide(
     let xml = async { state.transport.get_text(&url).await }
         .instrument(info_span!("epg_fetch", source = %sid))
         .await
-        .map_err(AppError::from)?;
+        .map_err(|e| {
+            tracing::warn!("epg fetch failed: {e}");
+            AppError::from(e)
+        })?;
     let guide = task::spawn_blocking(move || parse_xmltv(&xml))
         .await
         .map_err(join_err)?
-        .map_err(AppError::from)?;
+        .map_err(|e| {
+            tracing::warn!("epg parse failed: {e}");
+            AppError::from(e)
+        })?;
+    tracing::info!(
+        programmes = guide.programmes.len(),
+        channels = guide.channels.len(),
+        "parsed guide"
+    );
     state.epg.lock().unwrap().insert(sid.to_string(), guide);
     Ok(())
 }
