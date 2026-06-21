@@ -111,6 +111,17 @@ impl XtreamSource {
             self.base_url, self.username, self.password, stream_id, ext
         )
     }
+
+    /// Build the XMLTV guide URL for the whole account. Credentials are
+    /// percent-encoded for the query.
+    pub fn xmltv_url(&self) -> String {
+        format!(
+            "{}/xmltv.php?username={}&password={}",
+            self.base_url,
+            encode(&self.username),
+            encode(&self.password)
+        )
+    }
 }
 
 /// Percent-encode a query value. `NON_ALPHANUMERIC` is deliberately conservative:
@@ -183,6 +194,19 @@ mod tests {
         assert_eq!(
             source().live_stream_url("1001", "ts"),
             "http://host:8080/live/user/pass/1001.ts"
+        );
+    }
+
+    #[test]
+    fn xmltv_url_is_query_style_with_encoded_creds() {
+        assert_eq!(
+            source().xmltv_url(),
+            "http://host:8080/xmltv.php?username=user&password=pass"
+        );
+        let s = XtreamSource::new("http://host:8080", "u@1", "p/2");
+        assert_eq!(
+            s.xmltv_url(),
+            "http://host:8080/xmltv.php?username=u%401&password=p%2F2"
         );
     }
 

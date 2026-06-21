@@ -15,6 +15,10 @@ serde_json = "1"
 thiserror = "2"
 percent-encoding = "2"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
+# EPG: streaming XMLTV parser + timestamp parsing. `chrono` without `clock` keeps
+# this crate WASM-safe — `now` is always supplied by the shell, never read here.
+quick-xml = "0.37"
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 pollster = "0.4"

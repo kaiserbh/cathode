@@ -5,6 +5,7 @@
 //! behind traits so tests can substitute fakes. See AGENTS.md for the rules.
 
 pub mod catalog;
+pub mod epg;
 pub mod error;
 pub mod model;
 pub mod sources;

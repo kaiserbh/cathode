@@ -39,6 +39,16 @@ pub enum CoreError {
         /// The underlying storage error, stringified.
         message: String,
     },
+
+    /// An XML parse failure (XMLTV guide). The underlying parser error is
+    /// flattened to a message.
+    #[error("failed to parse {context}: {message}")]
+    Xml {
+        /// What we were parsing (e.g. "xmltv guide").
+        context: &'static str,
+        /// The underlying parse error, stringified.
+        message: String,
+    },
 }
 
 impl CoreError {
@@ -63,12 +73,21 @@ impl CoreError {
         }
     }
 
+    /// Convenience constructor for an XML parse failure with context.
+    pub fn xml(context: &'static str, message: impl Into<String>) -> Self {
+        Self::Xml {
+            context,
+            message: message.into(),
+        }
+    }
+
     /// Stable, machine-readable category for this error.
     fn code(&self) -> &'static str {
         match self {
             CoreError::Json { .. } => "parse",
             CoreError::Network { .. } => "network",
             CoreError::Storage { .. } => "storage",
+            CoreError::Xml { .. } => "parse",
         }
     }
 }
@@ -124,6 +143,14 @@ mod tests {
         assert_eq!(app.code, "storage");
         assert!(app.message.contains("load sources"));
         assert!(app.message.contains("database is locked"));
+    }
+
+    #[test]
+    fn maps_xml_error_to_parse_code() {
+        let core = CoreError::xml("xmltv guide", "unexpected eof");
+        let app: AppError = core.into();
+        assert_eq!(app.code, "parse");
+        assert!(app.message.contains("xmltv guide"));
     }
 
     #[test]
