@@ -18,6 +18,8 @@ pub struct LogLine {
     pub target: String,
     /// The event message (credentials already redacted).
     pub message: String,
+    /// Any extra structured `key=value` fields, space-joined (empty if none).
+    pub fields: String,
 }
 
 #[cfg(test)]
@@ -31,6 +33,7 @@ mod tests {
             level: "warn".to_string(),
             target: "cathode_lib::commands::sources".to_string(),
             message: "cache categories failed".to_string(),
+            fields: "count=0".to_string(),
         };
         let json = serde_json::to_string(&line).unwrap();
         assert_eq!(serde_json::from_str::<LogLine>(&json).unwrap(), line);
