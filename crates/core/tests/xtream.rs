@@ -2,14 +2,14 @@
 //! (including the string-vs-number id quirk and missing optional fields).
 
 use cathode_core::model::{CategoryId, StreamKind};
-use cathode_core::sources::xtream::{parse_live_categories, parse_live_streams, XtreamSource};
+use cathode_core::sources::xtream::{parse_categories, parse_live_streams, XtreamSource};
 
 const CATEGORIES_JSON: &str = include_str!("fixtures/xtream_live_categories.json");
 const STREAMS_JSON: &str = include_str!("fixtures/xtream_live_streams.json");
 
 #[test]
 fn parses_live_categories() {
-    let categories = parse_live_categories(CATEGORIES_JSON).unwrap();
+    let categories = parse_categories(CATEGORIES_JSON).unwrap();
     assert_eq!(categories.len(), 2);
     assert_eq!(categories[0].id, CategoryId("1".to_string()));
     assert_eq!(categories[0].name, "News");

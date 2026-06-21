@@ -4,6 +4,8 @@
 //! the parser; nothing outside this module should see them. They exist so the
 //! quirk-handling lives in one place before we map onto the clean model.
 
+use std::collections::HashMap;
+
 use serde::Deserialize;
 
 /// A value Xtream sends as either a JSON string or a JSON number.
@@ -51,6 +53,52 @@ pub struct RawLiveStream {
     /// The channel's EPG id (tvg-id); absent or empty on many providers.
     #[serde(default)]
     pub epg_channel_id: Option<String>,
+}
+
+/// Raw `get_vod_streams` entry. Like a live stream but carries the playable file
+/// extension and no EPG id.
+#[derive(Debug, Deserialize)]
+pub struct RawVodStream {
+    pub stream_id: FlexStr,
+    pub name: String,
+    #[serde(default)]
+    pub stream_icon: Option<String>,
+    #[serde(default)]
+    pub category_id: Option<FlexStr>,
+    #[serde(default)]
+    pub container_extension: Option<String>,
+}
+
+/// Raw `get_series` entry. Identified by `series_id` (not `stream_id`); the poster
+/// art is `cover`.
+#[derive(Debug, Deserialize)]
+pub struct RawSeries {
+    pub series_id: FlexStr,
+    pub name: String,
+    #[serde(default)]
+    pub cover: Option<String>,
+    #[serde(default)]
+    pub category_id: Option<FlexStr>,
+}
+
+/// Raw `get_series_info` response: episodes grouped by season number (as a string
+/// key). Other fields (`info`, `seasons`) are ignored.
+#[derive(Debug, Deserialize)]
+pub struct RawSeriesInfo {
+    #[serde(default)]
+    pub episodes: HashMap<String, Vec<RawEpisode>>,
+}
+
+/// Raw episode inside `get_series_info`.
+#[derive(Debug, Deserialize)]
+pub struct RawEpisode {
+    pub id: FlexStr,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub episode_num: Option<FlexStr>,
+    #[serde(default)]
+    pub container_extension: Option<String>,
 }
 
 #[cfg(test)]
