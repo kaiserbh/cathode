@@ -6,7 +6,7 @@
 
 use dioxus::prelude::*;
 
-use crate::components::icons::{Settings, Sources};
+use crate::components::icons::{Bug, Settings, Sources};
 
 const BTN: &str = "rounded-full p-2 text-neutral-600 hover:bg-neutral-100 \
     focus:outline-none focus:ring-2 focus:ring-sky-400 dark:text-neutral-300 \
@@ -16,6 +16,7 @@ const ICON: &str = "h-5 w-5";
 #[component]
 pub fn TitleBar(
     incognito: bool,
+    on_logs: EventHandler<()>,
     on_options: EventHandler<()>,
     on_sources: EventHandler<()>,
 ) -> Element {
@@ -32,6 +33,12 @@ pub fn TitleBar(
                             text-neutral-100 dark:bg-neutral-200 dark:text-neutral-900",
                         "Incognito"
                     }
+                }
+                button {
+                    class: BTN,
+                    title: "Logs",
+                    onclick: move |_| on_logs.call(()),
+                    Bug { class: ICON }
                 }
                 button {
                     class: BTN,

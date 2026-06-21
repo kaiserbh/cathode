@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use cathode_core::error::AppError;
 use cathode_core::model::{
-    Category, CategoryId, ChannelView, NowNext, Programme, Settings, Stream, StreamId,
+    Category, CategoryId, ChannelView, LogLevel, NowNext, Programme, Settings, Stream, StreamId,
 };
 use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
@@ -19,8 +19,8 @@ use gloo_timers::future::TimeoutFuture;
 
 use crate::bindings;
 use crate::components::{
-    CategoryList, ChannelPane, PlayerOverlay, SettingsPanel, SourcesPanel, Spinner, Tab, TabBar,
-    TitleBar,
+    CategoryList, ChannelPane, LogsPanel, PlayerOverlay, SettingsPanel, SourcesPanel, Spinner, Tab,
+    TabBar, TitleBar,
 };
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
@@ -47,6 +47,8 @@ pub fn Browse() -> Element {
     let mut favorites = use_signal(Vec::<Stream>::new);
     let mut history = use_signal(Vec::<Stream>::new);
     let mut show_settings = use_signal(|| false);
+    let mut show_logs = use_signal(|| false);
+    let mut logs = use_signal(Vec::<String>::new);
     let mut tab = use_signal(|| Tab::Channels);
     let mut epg = use_signal(HashMap::<String, NowNext>::new);
     let mut programmes = use_signal(HashMap::<String, Vec<Programme>>::new);
@@ -127,6 +129,20 @@ pub fn Browse() -> Element {
     use_future(move || async move {
         if let Ok(s) = bindings::get_settings().await {
             settings.set(s);
+            // Apply the persisted capture level to the backend on launch.
+            let _ = bindings::set_log_level(s.log_level).await;
+        }
+    });
+
+    // While the Logs panel is open, refresh the captured lines.
+    use_future(move || async move {
+        loop {
+            TimeoutFuture::new(1000).await;
+            if show_logs()
+                && let Ok(lines) = bindings::get_logs().await
+            {
+                logs.set(lines);
+            }
         }
     });
 
@@ -386,6 +402,17 @@ pub fn Browse() -> Element {
                 dark:bg-neutral-950 dark:text-neutral-100",
             TitleBar {
                 incognito: incognito(),
+                on_logs: move |_| {
+                    let open = !show_logs();
+                    show_logs.set(open);
+                    if open {
+                        spawn(async move {
+                            if let Ok(lines) = bindings::get_logs().await {
+                                logs.set(lines);
+                            }
+                        });
+                    }
+                },
                 on_options: move |_| show_settings.set(!show_settings()),
                 on_sources: move |_| show_sources.set(!show_sources()),
             }
@@ -551,6 +578,32 @@ pub fn Browse() -> Element {
                     });
                 },
                 on_close: move |_| show_settings.set(false),
+            }
+        }
+
+        if show_logs() {
+            LogsPanel {
+                logs: logs(),
+                level: current_settings.log_level,
+                on_set_level: move |l: LogLevel| {
+                    let mut s = settings();
+                    s.log_level = l;
+                    save_settings.call(s);
+                    spawn(async move {
+                        let _ = bindings::set_log_level(l).await;
+                    });
+                },
+                on_copy: move |_| {
+                    let text = logs().join("\n");
+                    spawn(crate::clipboard::copy(text));
+                },
+                on_clear: move |_| {
+                    logs.set(Vec::new());
+                    spawn(async move {
+                        let _ = bindings::clear_logs().await;
+                    });
+                },
+                on_close: move |_| show_logs.set(false),
             }
         }
     }
