@@ -8,10 +8,10 @@ use dioxus::prelude::*;
 
 use crate::components::icons::{Bug, Settings, Sources};
 
-const BTN: &str = "rounded-full p-2 text-neutral-600 hover:bg-neutral-100 \
+const BTN: &str = "rounded-md p-1 text-neutral-600 hover:bg-neutral-100 \
     focus:outline-none focus:ring-2 focus:ring-sky-400 dark:text-neutral-300 \
     dark:hover:bg-neutral-800";
-const ICON: &str = "h-5 w-5";
+const ICON: &str = "h-4 w-4";
 
 #[component]
 pub fn TitleBar(
@@ -25,9 +25,9 @@ pub fn TitleBar(
             // The empty bar itself drags the window; the traffic lights float over its
             // left end. Controls cluster on the right.
             "data-tauri-drag-region": "true",
-            class: "shrink-0 flex h-11 items-center border-b border-neutral-200 \
-                px-3 dark:border-neutral-800 dark:bg-neutral-950 bg-white",
-            div { class: "ml-auto flex items-center gap-2",
+            class: "shrink-0 flex h-8 items-center border-b border-neutral-200 \
+                px-2 dark:border-neutral-800 dark:bg-neutral-950 bg-white",
+            div { class: "ml-auto flex items-center gap-0.5",
                 if incognito {
                     span { class: "rounded-full bg-neutral-800 px-2 py-0.5 text-xs font-medium \
                             text-neutral-100 dark:bg-neutral-200 dark:text-neutral-900",
