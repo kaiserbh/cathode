@@ -114,6 +114,33 @@ pub fn Check(class: String) -> Element {
 }
 
 #[component]
+pub fn Tv(class: String) -> Element {
+    icon(
+        class,
+        "M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 \
+         2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z",
+    )
+}
+
+#[component]
+pub fn Film(class: String) -> Element {
+    icon(
+        class,
+        "M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 \
+         1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z",
+    )
+}
+
+#[component]
+pub fn Series(class: String) -> Element {
+    icon(
+        class,
+        "M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 \
+         2-.9 2-2V4c0-1.1-.9-2-2-2zm-9 12V6l5 4-5 4z",
+    )
+}
+
+#[component]
 pub fn Search(class: String) -> Element {
     icon(
         class,

@@ -7,12 +7,12 @@
 //! panel toggles features (favorites, history) and an incognito session switch;
 //! nothing is forced on the user.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cathode_core::error::AppError;
 use cathode_core::model::{
-    Category, CategoryId, ChannelView, LogLevel, LogLine, NowNext, Programme, Settings, Stream,
-    StreamId,
+    Category, CategoryId, ChannelView, Episode, LogLevel, LogLine, NowNext, Programme, SeriesInfo,
+    Settings, Stream, StreamId, StreamKind,
 };
 use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
@@ -20,8 +20,8 @@ use gloo_timers::future::TimeoutFuture;
 
 use crate::bindings;
 use crate::components::{
-    CategoryList, ChannelPane, LogsPanel, PlayerOverlay, SettingsPanel, SourcesPanel, Spinner, Tab,
-    TabBar, TitleBar, Toast,
+    CategoryList, ChannelPane, LogsPanel, PlayerOverlay, SearchResults, SeriesDetail,
+    SettingsPanel, SourcesPanel, Spinner, Tab, TabBar, TitleBar, Toast,
 };
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
@@ -29,6 +29,16 @@ fn bump_source(mut sources: Signal<Vec<XtreamCredentials>>, c: XtreamCredentials
     let mut list = sources.write();
     list.retain(|s| s != &c);
     list.insert(0, c);
+}
+
+/// The content kind a tab browses, or `None` for the library tabs (Favorites/History).
+fn tab_kind(tab: Tab) -> Option<StreamKind> {
+    match tab {
+        Tab::Live => Some(StreamKind::Live),
+        Tab::Movies => Some(StreamKind::Vod),
+        Tab::Series => Some(StreamKind::Series),
+        _ => None,
+    }
 }
 
 #[component]
@@ -52,15 +62,24 @@ pub fn Browse() -> Element {
     let mut logs = use_signal(Vec::<LogLine>::new);
     let mut toast = use_signal(|| None::<String>);
     let mut toast_seq = use_signal(|| 0u32);
-    let mut tab = use_signal(|| Tab::Channels);
+    let mut tab = use_signal(|| Tab::Live);
     let mut epg = use_signal(HashMap::<String, NowNext>::new);
     let mut programmes = use_signal(HashMap::<String, Vec<Programme>>::new);
     let mut guide_from = use_signal(|| 0i64);
     let mut guide_to = use_signal(|| 0i64);
     let mut fullscreen = use_signal(|| false);
+    // Series drill-down: the opened series and its (lazily fetched) seasons/episodes.
+    let mut series_detail = use_signal(|| None::<Stream>);
+    let mut series_info = use_signal(|| None::<SeriesInfo>);
+    // Library search: the query and its matches (across the whole cached library).
+    let mut search_query = use_signal(String::new);
+    let mut search_results = use_signal(Vec::<Stream>::new);
+    // `(source|kind)` keys we've already background-prefetched this session, so the
+    // sweep that warms the cache runs at most once per account + content kind.
+    let mut prefetched = use_signal(HashSet::<String>::new);
 
-    // Make a source active: paint its cached channels instantly, refresh from the
-    // network, and load its favorites + history.
+    // Make a source active: reset to the Live tab (the per-kind effect below loads its
+    // categories), and load its favorites + history + EPG.
     let activate = use_callback(move |new_creds: XtreamCredentials| {
         creds.set(Some(new_creds.clone()));
         selected.set(None);
@@ -69,18 +88,8 @@ pub fn Browse() -> Element {
         favorites.set(Vec::new());
         history.set(Vec::new());
         epg.set(HashMap::new());
-        tab.set(Tab::Channels);
+        tab.set(Tab::Live);
         error.set(None);
-
-        let cached_creds = new_creds.clone();
-        spawn(async move {
-            if let Ok(cached) = bindings::cached_categories(&cached_creds).await
-                && !cached.is_empty()
-                && categories.read().is_empty()
-            {
-                categories.set(cached);
-            }
-        });
 
         let fav_creds = new_creds.clone();
         spawn(async move {
@@ -104,15 +113,64 @@ pub fn Browse() -> Element {
                 }
             });
         }
+    });
+
+    // Load the categories for a content kind: paint the cache instantly, then refresh
+    // from the network (dropping the response if the user switched kinds meanwhile).
+    let load_kind = use_callback(move |(current, kind): (XtreamCredentials, StreamKind)| {
+        selected.set(None);
+        streams.set(Vec::new());
+        categories.set(Vec::new());
+        error.set(None);
+
+        let cached_creds = current.clone();
+        spawn(async move {
+            if let Ok(cached) = bindings::cached_categories(&cached_creds, kind).await
+                && tab_kind(tab()) == Some(kind)
+                && !cached.is_empty()
+                && categories.read().is_empty()
+            {
+                categories.set(cached);
+            }
+        });
 
         loading.set(true);
         spawn(async move {
-            match bindings::list_categories(&new_creds).await {
-                Ok(list) => categories.set(list),
+            let result = bindings::list_categories(&current, kind).await;
+            if tab_kind(tab()) != Some(kind) {
+                return; // the user switched tabs while we were fetching
+            }
+            match result {
+                Ok(list) => {
+                    categories.set(list.clone());
+                    // Warm the cache for the whole library: fetch every category's
+                    // streams in the background (once per account + kind) so search is
+                    // comprehensive and switching categories is instant.
+                    let key = format!("{}|{}|{:?}", current.base_url, current.username, kind);
+                    if !prefetched.read().contains(&key) {
+                        prefetched.write().insert(key);
+                        let pf_creds = current.clone();
+                        spawn(async move {
+                            for c in list {
+                                let _ =
+                                    bindings::list_streams(&pf_creds, kind, Some(&c.id.0)).await;
+                            }
+                        });
+                    }
+                }
                 Err(e) => error.set(Some(e)),
             }
             loading.set(false);
         });
+    });
+
+    // Whenever the active account or content tab changes, (re)load that kind's
+    // categories. Library tabs (Favorites/History) carry no kind and are skipped.
+    use_effect(move || {
+        let t = tab();
+        if let (Some(kind), Some(current)) = (tab_kind(t), creds.read().clone()) {
+            load_kind.call((current, kind));
+        }
     });
 
     // On launch: load saved accounts (auto-open the most recent) and settings.
@@ -249,6 +307,9 @@ pub fn Browse() -> Element {
         let Some(current) = creds.read().clone() else {
             return;
         };
+        let Some(kind) = tab_kind(tab()) else {
+            return;
+        };
         selected.set(Some(id.clone()));
         streams.set(Vec::new());
         error.set(None);
@@ -256,7 +317,7 @@ pub fn Browse() -> Element {
         let cached_creds = current.clone();
         let cached_id = id.clone();
         spawn(async move {
-            if let Ok(cached) = bindings::cached_streams(&cached_creds, &cached_id.0).await {
+            if let Ok(cached) = bindings::cached_streams(&cached_creds, kind, &cached_id.0).await {
                 // Drop the result if the user has since switched categories, and
                 // only paint the cache if the network hasn't already answered.
                 if selected.read().as_ref() == Some(&cached_id)
@@ -271,7 +332,7 @@ pub fn Browse() -> Element {
         loading.set(true);
         let net_id = id.clone();
         spawn(async move {
-            let result = bindings::list_streams(&current, Some(&id.0)).await;
+            let result = bindings::list_streams(&current, kind, Some(&id.0)).await;
             // A response for a category the user already left is stale — drop it.
             if selected.read().as_ref() != Some(&net_id) {
                 return;
@@ -284,11 +345,13 @@ pub fn Browse() -> Element {
         });
     };
 
-    let on_play = use_callback(move |stream: Stream| {
+    // Actually start playback of a concrete playable (a Live/VOD stream or a series
+    // episode synthesized as a Series stream).
+    let play_now = use_callback(move |stream: Stream| {
         let Some(current) = creds.read().clone() else {
             return;
         };
-        let provider_id = stream.provider_id.clone();
+        let play_stream = stream.clone();
         playing.set(Some(stream.clone()));
         paused.set(false);
         error.set(None);
@@ -296,7 +359,7 @@ pub fn Browse() -> Element {
         let play_creds = current.clone();
         let s = *settings.read();
         spawn(async move {
-            if let Err(e) = bindings::play_stream(&play_creds, &provider_id).await {
+            if let Err(e) = bindings::play_stream(&play_creds, &play_stream).await {
                 error.set(Some(e));
                 return;
             }
@@ -313,6 +376,30 @@ pub fn Browse() -> Element {
             spawn(async move {
                 let _ = bindings::record_watch(&watch_creds, &stream).await;
             });
+        }
+    });
+
+    // Open a series' drill-down (fetch its seasons/episodes lazily).
+    let open_series = use_callback(move |series: Stream| {
+        let Some(current) = creds.read().clone() else {
+            return;
+        };
+        let series_id = series.provider_id.clone();
+        series_detail.set(Some(series));
+        series_info.set(None);
+        spawn(async move {
+            if let Ok(info) = bindings::get_series_info(&current, &series_id).await {
+                series_info.set(Some(info));
+            }
+        });
+    });
+
+    // A card click: a series opens its drill-down; anything else plays.
+    let on_play = use_callback(move |stream: Stream| {
+        if stream.kind == StreamKind::Series {
+            open_series.call(stream);
+        } else {
+            play_now.call(stream);
         }
     });
 
@@ -406,10 +493,10 @@ pub fn Browse() -> Element {
     let channel_view = current_settings.channel_view;
     let favorite_ids: Vec<StreamId> = favorites().iter().map(|s| s.id.clone()).collect();
 
-    // A disabled feature's tab falls back to Channels.
+    // A disabled feature's tab falls back to Live.
     let current_tab = match tab() {
-        Tab::Favorites if !favorites_enabled => Tab::Channels,
-        Tab::History if !history_enabled => Tab::Channels,
+        Tab::Favorites if !favorites_enabled => Tab::Live,
+        Tab::History if !history_enabled => Tab::Live,
         t => t,
     };
 
@@ -419,6 +506,24 @@ pub fn Browse() -> Element {
                 dark:bg-neutral-950 dark:text-neutral-100",
             TitleBar {
                 incognito: incognito(),
+                search: search_query(),
+                on_search: move |q: String| {
+                    search_query.set(q.clone());
+                    let trimmed = q.trim().to_string();
+                    if trimmed.is_empty() {
+                        search_results.set(Vec::new());
+                        return;
+                    }
+                    if let Some(current) = creds.read().clone() {
+                        spawn(async move {
+                            if let Ok(list) = bindings::search_streams(&current, &trimmed).await
+                                && search_query().trim() == trimmed
+                            {
+                                search_results.set(list);
+                            }
+                        });
+                    }
+                },
                 on_logs: move |_| {
                     let open = !show_logs();
                     show_logs.set(open);
@@ -451,36 +556,52 @@ pub fn Browse() -> Element {
                     on_select: move |t| tab.set(t),
                 }
                 match current_tab {
-                    Tab::Channels => rsx! {
-                        div {
-                            class: "flex flex-col md:flex-row flex-1 min-h-0",
-                            CategoryList {
-                                categories: categories(),
-                                selected: selected(),
-                                on_select,
-                            }
-                            main {
-                                class: "flex-1 min-h-0 overflow-y-auto",
-                                if loading() && streams().is_empty() {
-                                    Spinner {}
-                                } else {
-                                    ChannelPane {
-                                        view: channel_view,
-                                        streams: streams(),
-                                        favorites_enabled,
-                                        favorite_ids: favorite_ids.clone(),
-                                        epg: epg(),
-                                        programmes: programmes(),
-                                        guide_from: guide_from(),
-                                        guide_to: guide_to(),
-                                        now: crate::format::now_unix(),
-                                        on_play: move |s| on_play.call(s),
-                                        on_toggle_favorite: move |s| toggle_favorite.call(s),
+                    Tab::Live | Tab::Movies | Tab::Series => {
+                        // EPG and the timeline Guide view are Live-only; Movies/Series
+                        // use Grid/List with no guide data.
+                        let is_live = current_tab == Tab::Live;
+                        let view = match (is_live, channel_view) {
+                            (false, ChannelView::Guide) => ChannelView::Grid,
+                            (_, v) => v,
+                        };
+                        let pane_epg = if is_live { epg() } else { HashMap::new() };
+                        let pane_prog = if is_live { programmes() } else { HashMap::new() };
+                        rsx! {
+                            div {
+                                class: "flex flex-col md:flex-row flex-1 min-h-0",
+                                CategoryList {
+                                    categories: categories(),
+                                    selected: selected(),
+                                    on_select,
+                                }
+                                main {
+                                    class: "flex-1 min-h-0 overflow-y-auto",
+                                    if selected().is_none() {
+                                        p {
+                                            class: "p-6 text-sm text-neutral-500",
+                                            "Pick a category to start browsing."
+                                        }
+                                    } else if loading() && streams().is_empty() {
+                                        Spinner {}
+                                    } else {
+                                        ChannelPane {
+                                            view,
+                                            streams: streams(),
+                                            favorites_enabled,
+                                            favorite_ids: favorite_ids.clone(),
+                                            epg: pane_epg,
+                                            programmes: pane_prog,
+                                            guide_from: guide_from(),
+                                            guide_to: guide_to(),
+                                            now: crate::format::now_unix(),
+                                            on_play: move |s| on_play.call(s),
+                                            on_toggle_favorite: move |s| toggle_favorite.call(s),
+                                        }
                                     }
                                 }
                             }
                         }
-                    },
+                    }
                     Tab::Favorites => rsx! {
                         main {
                             class: "flex-1 overflow-y-auto",
@@ -636,6 +757,42 @@ pub fn Browse() -> Element {
                     });
                 },
                 on_close: move |_| show_logs.set(false),
+            }
+        }
+
+        if let Some(series) = series_detail() {
+            SeriesDetail {
+                series: series.clone(),
+                info: series_info(),
+                on_play_episode: move |ep: Episode| {
+                    let stream = Stream {
+                        id: StreamId(format!("ep:{}", ep.id)),
+                        provider_id: ep.id.clone(),
+                        name: format!("{} · S{}E{}", series.name, ep.season, ep.episode),
+                        logo: series.logo.clone(),
+                        category_id: None,
+                        kind: StreamKind::Series,
+                        epg_channel_id: None,
+                        container_extension: ep.container_extension.clone(),
+                    };
+                    play_now.call(stream);
+                },
+                on_close: move |_| series_detail.set(None),
+            }
+        }
+
+        if !search_query().is_empty() {
+            SearchResults {
+                results: search_results(),
+                on_select: move |s: Stream| {
+                    search_query.set(String::new());
+                    search_results.set(Vec::new());
+                    on_play.call(s);
+                },
+                on_close: move |_| {
+                    search_query.set(String::new());
+                    search_results.set(Vec::new());
+                },
             }
         }
 
