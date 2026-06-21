@@ -83,6 +83,12 @@ pub fn SettingsPanel(
                                 current: settings.channel_view,
                                 on_set_view,
                             }
+                            ViewButton {
+                                label: "Guide",
+                                view: ChannelView::Guide,
+                                current: settings.channel_view,
+                                on_set_view,
+                            }
                         }
                     }
                     ToggleRow {

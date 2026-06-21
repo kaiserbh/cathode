@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, NowNext, Settings, Stream};
+use cathode_core::model::{Category, NowNext, Programme, Settings, Stream};
 use cathode_core::sources::xtream::XtreamCredentials;
 use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::prelude::*;
@@ -205,4 +205,21 @@ pub async fn clear_history() -> Result<(), AppError> {
 /// Now/next per channel (keyed by `epg_channel_id`) for an account's XMLTV guide.
 pub async fn epg_now_next(creds: &XtreamCredentials) -> Result<HashMap<String, NowNext>, AppError> {
     call("epg_now_next", &CategoriesArgs { creds }).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProgrammesArgs<'a> {
+    creds: &'a XtreamCredentials,
+    from: i64,
+    to: i64,
+}
+
+/// Programmes overlapping `[from, to]` per channel, for the timeline guide.
+pub async fn epg_programmes(
+    creds: &XtreamCredentials,
+    from: i64,
+    to: i64,
+) -> Result<HashMap<String, Vec<Programme>>, AppError> {
+    call("epg_programmes", &ProgrammesArgs { creds, from, to }).await
 }
