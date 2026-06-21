@@ -7,10 +7,13 @@
 //! panel toggles features (favorites, history) and an incognito session switch;
 //! nothing is forced on the user.
 
+use std::collections::HashMap;
+
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, CategoryId, Settings, Stream, StreamId};
+use cathode_core::model::{Category, CategoryId, NowNext, Settings, Stream, StreamId};
 use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
+use gloo_timers::future::TimeoutFuture;
 
 use crate::bindings;
 use crate::components::{
@@ -42,6 +45,7 @@ pub fn Browse() -> Element {
     let mut history = use_signal(Vec::<Stream>::new);
     let mut show_settings = use_signal(|| false);
     let mut tab = use_signal(|| Tab::Channels);
+    let mut epg = use_signal(HashMap::<String, NowNext>::new);
 
     // Make a source active: paint its cached channels instantly, refresh from the
     // network, and load its favorites + history.
@@ -52,6 +56,7 @@ pub fn Browse() -> Element {
         categories.set(Vec::new());
         favorites.set(Vec::new());
         history.set(Vec::new());
+        epg.set(HashMap::new());
         tab.set(Tab::Channels);
         error.set(None);
 
@@ -74,6 +79,14 @@ pub fn Browse() -> Element {
         spawn(async move {
             if let Ok(list) = bindings::list_history(&hist_creds).await {
                 history.set(list);
+            }
+        });
+
+        let epg_creds = new_creds.clone();
+        spawn(async move {
+            // EPG is best-effort: a provider without a guide just shows none.
+            if let Ok(map) = bindings::epg_now_next(&epg_creds).await {
+                epg.set(map);
             }
         });
 
@@ -104,6 +117,19 @@ pub fn Browse() -> Element {
     use_future(move || async move {
         if let Ok(s) = bindings::get_settings().await {
             settings.set(s);
+        }
+    });
+
+    // Keep now/next current as time passes. The guide is cached server-side after the
+    // first fetch, so this just recomputes against the clock — no re-download.
+    use_future(move || async move {
+        loop {
+            TimeoutFuture::new(60_000).await;
+            if let Some(current) = creds.read().clone() {
+                if let Ok(map) = bindings::epg_now_next(&current).await {
+                    epg.set(map);
+                }
+            }
         }
     });
 
@@ -322,6 +348,7 @@ pub fn Browse() -> Element {
                                         streams: streams(),
                                         favorites_enabled,
                                         favorite_ids: favorite_ids.clone(),
+                                        epg: epg(),
                                         on_play: move |s| on_play.call(s),
                                         on_toggle_favorite: move |s| toggle_favorite.call(s),
                                     }
@@ -342,6 +369,7 @@ pub fn Browse() -> Element {
                                     streams: favorites(),
                                     favorites_enabled,
                                     favorite_ids: favorite_ids.clone(),
+                                    epg: epg(),
                                     on_play: move |s| on_play.call(s),
                                     on_toggle_favorite: move |s| toggle_favorite.call(s),
                                 }
@@ -361,6 +389,7 @@ pub fn Browse() -> Element {
                                     streams: history(),
                                     favorites_enabled,
                                     favorite_ids: favorite_ids.clone(),
+                                    epg: epg(),
                                     on_play: move |s| on_play.call(s),
                                     on_toggle_favorite: move |s| toggle_favorite.call(s),
                                 }

@@ -1,7 +1,9 @@
 //! The channel grid. Responsive columns; cards are focusable for TV navigation.
 //! Each card plays on click and, when favorites are enabled, carries a star toggle.
 
-use cathode_core::model::{Stream, StreamId};
+use std::collections::HashMap;
+
+use cathode_core::model::{NowNext, Stream, StreamId};
 use dioxus::prelude::*;
 
 #[component]
@@ -9,6 +11,7 @@ pub fn StreamGrid(
     streams: Vec<Stream>,
     favorites_enabled: bool,
     favorite_ids: Vec<StreamId>,
+    epg: HashMap<String, NowNext>,
     on_play: EventHandler<Stream>,
     on_toggle_favorite: EventHandler<Stream>,
 ) -> Element {
@@ -25,6 +28,7 @@ pub fn StreamGrid(
                 let played = stream.clone();
                 let favorited = stream.clone();
                 let is_favorite = favorite_ids.contains(&stream.id);
+                let now_next = stream.epg_channel_id.as_ref().and_then(|id| epg.get(id));
                 rsx! {
                     div {
                         key: "{stream.id.0}",
@@ -50,6 +54,22 @@ pub fn StreamGrid(
                                 }
                             }
                             span { class: "w-full truncate text-center text-sm", "{stream.name}" }
+                            if let Some(nn) = now_next {
+                                if let Some(now) = nn.now.as_ref() {
+                                    span {
+                                        class: "w-full truncate text-center text-xs \
+                                            text-neutral-500 dark:text-neutral-400",
+                                        "{now.title}"
+                                    }
+                                }
+                                if let Some(next) = nn.next.as_ref() {
+                                    span {
+                                        class: "w-full truncate text-center text-[11px] \
+                                            text-neutral-400 dark:text-neutral-500",
+                                        "Next: {next.title}"
+                                    }
+                                }
+                            }
                         }
                         if favorites_enabled {
                             button {
