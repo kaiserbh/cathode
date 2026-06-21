@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, CategoryId, NowNext, Settings, Stream, StreamId};
+use cathode_core::model::{Category, CategoryId, ChannelView, NowNext, Settings, Stream, StreamId};
 use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
@@ -82,13 +82,15 @@ pub fn Browse() -> Element {
             }
         });
 
-        let epg_creds = new_creds.clone();
-        spawn(async move {
-            // EPG is best-effort: a provider without a guide just shows none.
-            if let Ok(map) = bindings::epg_now_next(&epg_creds).await {
-                epg.set(map);
-            }
-        });
+        if settings.read().epg_enabled {
+            let epg_creds = new_creds.clone();
+            spawn(async move {
+                // EPG is best-effort: a provider without a guide just shows none.
+                if let Ok(map) = bindings::epg_now_next(&epg_creds).await {
+                    epg.set(map);
+                }
+            });
+        }
 
         loading.set(true);
         spawn(async move {
@@ -125,6 +127,9 @@ pub fn Browse() -> Element {
     use_future(move || async move {
         loop {
             TimeoutFuture::new(60_000).await;
+            if !settings.read().epg_enabled {
+                continue;
+            }
             if let Some(current) = creds.read().clone() {
                 if let Ok(map) = bindings::epg_now_next(&current).await {
                     epg.set(map);
@@ -441,6 +446,27 @@ pub fn Browse() -> Element {
                 on_toggle_history: move |v| {
                     let mut s = settings();
                     s.history_enabled = v;
+                    save_settings.call(s);
+                },
+                on_toggle_epg: move |v| {
+                    let mut s = settings();
+                    s.epg_enabled = v;
+                    save_settings.call(s);
+                    if v {
+                        if let Some(current) = creds.read().clone() {
+                            spawn(async move {
+                                if let Ok(map) = bindings::epg_now_next(&current).await {
+                                    epg.set(map);
+                                }
+                            });
+                        }
+                    } else {
+                        epg.set(HashMap::new());
+                    }
+                },
+                on_set_view: move |v: ChannelView| {
+                    let mut s = settings();
+                    s.channel_view = v;
                     save_settings.call(s);
                 },
                 on_toggle_incognito: move |v| incognito.set(v),
