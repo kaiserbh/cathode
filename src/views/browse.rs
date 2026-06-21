@@ -20,6 +20,7 @@ use gloo_timers::future::TimeoutFuture;
 use crate::bindings;
 use crate::components::{
     CategoryList, ChannelPane, PlayerOverlay, SettingsPanel, SourcesPanel, Spinner, Tab, TabBar,
+    TitleBar,
 };
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
@@ -383,26 +384,10 @@ pub fn Browse() -> Element {
         div {
             class: "h-screen overflow-hidden flex flex-col bg-white text-neutral-900 \
                 dark:bg-neutral-950 dark:text-neutral-100",
-            header {
-                class: "shrink-0 flex items-center justify-between border-b border-neutral-200 \
-                    dark:border-neutral-800 p-4",
-                div {
-                    class: "flex items-center gap-3",
-                    h1 { class: "text-lg font-semibold", "Cathode" }
-                    if incognito() {
-                        span {
-                            class: "rounded-full bg-neutral-800 px-2 py-0.5 text-xs \
-                                font-medium text-neutral-100 dark:bg-neutral-200 \
-                                dark:text-neutral-900",
-                            "Incognito"
-                        }
-                    }
-                }
-                div {
-                    class: "flex items-center gap-2",
-                    HeaderButton { label: "Options", onclick: move |_| show_settings.set(!show_settings()) }
-                    HeaderButton { label: "Sources", onclick: move |_| show_sources.set(!show_sources()) }
-                }
+            TitleBar {
+                incognito: incognito(),
+                on_options: move |_| show_settings.set(!show_settings()),
+                on_sources: move |_| show_sources.set(!show_sources()),
             }
 
             if let Some(err) = error() {
@@ -567,19 +552,6 @@ pub fn Browse() -> Element {
                 },
                 on_close: move |_| show_settings.set(false),
             }
-        }
-    }
-}
-
-#[component]
-fn HeaderButton(label: String, onclick: EventHandler<MouseEvent>) -> Element {
-    rsx! {
-        button {
-            class: "rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium \
-                hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-sky-400 \
-                dark:border-neutral-700 dark:hover:bg-neutral-800",
-            onclick: move |e| onclick.call(e),
-            {label}
         }
     }
 }
