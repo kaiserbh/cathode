@@ -162,6 +162,33 @@ pub async fn stop() -> Result<(), AppError> {
     call_unit("stop_playback", &NoArgs {}).await
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VolumeArgs {
+    volume: u8,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MuteArgs {
+    muted: bool,
+}
+
+/// Set playback volume (0–100).
+pub async fn set_volume(volume: u8) -> Result<(), AppError> {
+    call_unit("set_volume", &VolumeArgs { volume }).await
+}
+
+/// Mute or unmute playback.
+pub async fn set_mute(muted: bool) -> Result<(), AppError> {
+    call_unit("set_mute", &MuteArgs { muted }).await
+}
+
+/// Toggle the window's fullscreen; returns the new state.
+pub async fn toggle_fullscreen() -> Result<bool, AppError> {
+    call("toggle_fullscreen", &NoArgs {}).await
+}
+
 /// Current feature settings (favorites/history toggles).
 pub async fn get_settings() -> Result<Settings, AppError> {
     call("get_settings", &NoArgs {}).await

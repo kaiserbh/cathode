@@ -65,4 +65,18 @@ impl Player {
     pub fn stop(&self) -> Result<(), AppError> {
         self.mpv.command("stop", &[]).map_err(|e| err("stop", e))
     }
+
+    /// Set the output volume (0–100). mpv keeps this across `loadfile`, so it
+    /// persists for the session once applied.
+    pub fn set_volume(&self, volume: f64) -> Result<(), AppError> {
+        self.mpv
+            .set_property("volume", volume)
+            .map_err(|e| err("set volume", e))
+    }
+
+    pub fn set_mute(&self, muted: bool) -> Result<(), AppError> {
+        self.mpv
+            .set_property("mute", muted)
+            .map_err(|e| err("set mute", e))
+    }
 }
