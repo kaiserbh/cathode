@@ -5,22 +5,32 @@
 //! per platform) without the frontend or these signatures changing.
 
 use cathode_core::error::AppError;
+use cathode_core::model::{Stream, StreamKind};
 use cathode_core::sources::xtream::{XtreamCredentials, XtreamSource};
 use tauri::State;
 use tracing::info_span;
 
 use crate::playback::Player;
 
-/// Load and play a live stream by its provider id (Xtream `stream_id`).
+/// Load and play a stream. The playable URL depends on the content kind: Live plays
+/// `.ts`, VOD/Series use the stream's `container_extension` (defaulting to `mp4`).
 #[tauri::command]
 pub fn play_stream(
     player: State<'_, Player>,
     creds: XtreamCredentials,
-    stream_id: String,
+    stream: Stream,
 ) -> Result<(), AppError> {
-    let _span = info_span!("play_stream", stream_id = %stream_id).entered();
-    tracing::info!(%stream_id, "playing stream");
-    let url = XtreamSource::from_credentials(&creds).live_stream_url(&stream_id, "ts");
+    let _span =
+        info_span!("play_stream", provider_id = %stream.provider_id, kind = ?stream.kind).entered();
+    tracing::info!(provider_id = %stream.provider_id, kind = ?stream.kind, "playing stream");
+    let source = XtreamSource::from_credentials(&creds);
+    let id = &stream.provider_id;
+    let ext = stream.container_extension.as_deref();
+    let url = match stream.kind {
+        StreamKind::Live => source.live_stream_url(id, "ts"),
+        StreamKind::Vod => source.vod_stream_url(id, ext.unwrap_or("mp4")),
+        StreamKind::Series => source.series_episode_url(id, ext.unwrap_or("mp4")),
+    };
     player.load(&url)
 }
 

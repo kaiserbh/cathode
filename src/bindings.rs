@@ -9,7 +9,9 @@
 use std::collections::HashMap;
 
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, LogLevel, LogLine, NowNext, Programme, Settings, Stream};
+use cathode_core::model::{
+    Category, LogLevel, LogLine, NowNext, Programme, SeriesInfo, Settings, Stream, StreamKind,
+};
 use cathode_core::sources::xtream::XtreamCredentials;
 use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::prelude::*;
@@ -32,8 +34,16 @@ struct CategoriesArgs<'a> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct KindCatArgs<'a> {
+    creds: &'a XtreamCredentials,
+    kind: StreamKind,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct StreamsArgs<'a> {
     creds: &'a XtreamCredentials,
+    kind: StreamKind,
     category_id: Option<&'a str>,
 }
 
@@ -41,7 +51,21 @@ struct StreamsArgs<'a> {
 #[serde(rename_all = "camelCase")]
 struct PlayArgs<'a> {
     creds: &'a XtreamCredentials,
-    stream_id: &'a str,
+    stream: &'a Stream,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchArgs<'a> {
+    creds: &'a XtreamCredentials,
+    query: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SeriesInfoArgs<'a> {
+    creds: &'a XtreamCredentials,
+    series_id: &'a str,
 }
 
 #[derive(Serialize)]
@@ -113,41 +137,76 @@ pub async fn forget_source(creds: &XtreamCredentials) -> Result<(), AppError> {
 }
 
 /// Cached categories for an account (empty if nothing cached yet).
-pub async fn cached_categories(creds: &XtreamCredentials) -> Result<Vec<Category>, AppError> {
-    call("cached_categories", &CategoriesArgs { creds }).await
+pub async fn cached_categories(
+    creds: &XtreamCredentials,
+    kind: StreamKind,
+) -> Result<Vec<Category>, AppError> {
+    call("cached_categories", &KindCatArgs { creds, kind }).await
 }
 
-/// Cached streams for an account + category (empty if nothing cached yet).
+/// Cached streams for an account + kind + category (empty if nothing cached yet).
 pub async fn cached_streams(
     creds: &XtreamCredentials,
+    kind: StreamKind,
     category_id: &str,
 ) -> Result<Vec<Stream>, AppError> {
     call(
         "cached_streams",
         &StreamsArgs {
             creds,
+            kind,
             category_id: Some(category_id),
         },
     )
     .await
 }
 
-/// List the live categories for an Xtream account.
-pub async fn list_categories(creds: &XtreamCredentials) -> Result<Vec<Category>, AppError> {
-    call("list_categories", &CategoriesArgs { creds }).await
+/// List the categories of a content kind for an Xtream account.
+pub async fn list_categories(
+    creds: &XtreamCredentials,
+    kind: StreamKind,
+) -> Result<Vec<Category>, AppError> {
+    call("list_categories", &KindCatArgs { creds, kind }).await
 }
 
-/// List the live streams for an Xtream account, optionally scoped to a category.
+/// List the streams of a content kind for an Xtream account, optionally scoped to a
+/// category.
 pub async fn list_streams(
     creds: &XtreamCredentials,
+    kind: StreamKind,
     category_id: Option<&str>,
 ) -> Result<Vec<Stream>, AppError> {
-    call("list_streams", &StreamsArgs { creds, category_id }).await
+    call(
+        "list_streams",
+        &StreamsArgs {
+            creds,
+            kind,
+            category_id,
+        },
+    )
+    .await
 }
 
-/// Start playing a live stream (by its provider id) in the embedded mpv surface.
-pub async fn play_stream(creds: &XtreamCredentials, stream_id: &str) -> Result<(), AppError> {
-    call_unit("play_stream", &PlayArgs { creds, stream_id }).await
+/// Search the account's cached library (all kinds/categories) by name.
+pub async fn search_streams(
+    creds: &XtreamCredentials,
+    query: &str,
+) -> Result<Vec<Stream>, AppError> {
+    call("search_streams", &SearchArgs { creds, query }).await
+}
+
+/// Fetch the seasons and episodes of one series.
+pub async fn get_series_info(
+    creds: &XtreamCredentials,
+    series_id: &str,
+) -> Result<SeriesInfo, AppError> {
+    call("get_series_info", &SeriesInfoArgs { creds, series_id }).await
+}
+
+/// Start playing a stream in the embedded mpv surface. The backend resolves the URL
+/// by the stream's kind (Live/VOD/Series episode).
+pub async fn play_stream(creds: &XtreamCredentials, stream: &Stream) -> Result<(), AppError> {
+    call_unit("play_stream", &PlayArgs { creds, stream }).await
 }
 
 pub async fn pause() -> Result<(), AppError> {
