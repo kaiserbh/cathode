@@ -60,7 +60,7 @@ fn next_stamp(conn: &Connection, max_sql: &str) -> Result<i64, CoreError> {
 }
 
 /// Read a stream snapshot from a favorite/history row selected as
-/// `(stream_id, provider_id, name, logo, kind, category_id)`.
+/// `(stream_id, provider_id, name, logo, kind, category_id, epg_channel_id)`.
 fn row_to_stream(row: &Row) -> rusqlite::Result<Stream> {
     let kind: String = row.get(4)?;
     let category_id: Option<String> = row.get(5)?;
@@ -71,6 +71,7 @@ fn row_to_stream(row: &Row) -> rusqlite::Result<Stream> {
         logo: row.get(3)?,
         category_id: category_id.map(CategoryId),
         kind: kind_from_str(&kind),
+        epg_channel_id: row.get(6)?,
     })
 }
 
@@ -172,6 +173,21 @@ fn migrate(conn: &Connection) -> Result<(), CoreError> {
              COMMIT;",
         )
         .map_err(|e| store("create schema v2", e))?;
+        version = 2;
+    }
+
+    if version < 3 {
+        // EPG: carry each stream's epg_channel_id (tvg-id) through the snapshot
+        // tables so cached/favorite/history cards can match guide programmes.
+        conn.execute_batch(
+            "BEGIN;
+             ALTER TABLE stream ADD COLUMN epg_channel_id TEXT;
+             ALTER TABLE favorite ADD COLUMN epg_channel_id TEXT;
+             ALTER TABLE history ADD COLUMN epg_channel_id TEXT;
+             PRAGMA user_version = 3;
+             COMMIT;",
+        )
+        .map_err(|e| store("create schema v3", e))?;
     }
 
     Ok(())
@@ -296,8 +312,9 @@ impl Catalog for SqliteCatalog {
             let mut stmt = tx
                 .prepare(
                     "INSERT INTO stream
-                       (source_id, category_id, stream_id, provider_id, name, logo, kind)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                       (source_id, category_id, stream_id, provider_id, name, logo, kind,
+                        epg_channel_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 )
                 .map_err(|e| store("prepare stream insert", e))?;
             for stream in streams {
@@ -309,6 +326,7 @@ impl Catalog for SqliteCatalog {
                     stream.name,
                     stream.logo,
                     kind_to_str(stream.kind),
+                    stream.epg_channel_id,
                 ])
                 .map_err(|e| store("insert stream", e))?;
             }
@@ -320,7 +338,7 @@ impl Catalog for SqliteCatalog {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT stream_id, provider_id, name, logo, kind FROM stream
+                "SELECT stream_id, provider_id, name, logo, kind, epg_channel_id FROM stream
                  WHERE source_id = ?1 AND category_id = ?2 ORDER BY rowid",
             )
             .map_err(|e| store("prepare streams", e))?;
@@ -334,6 +352,7 @@ impl Catalog for SqliteCatalog {
                     logo: row.get(3)?,
                     category_id: Some(CategoryId(category_id.to_string())),
                     kind: kind_from_str(&kind),
+                    epg_channel_id: row.get(5)?,
                 })
             })
             .map_err(|e| store("query streams", e))?;
@@ -369,8 +388,9 @@ impl Catalog for SqliteCatalog {
         let category_id = stream.category_id.as_ref().map(|c| c.0.clone());
         conn.execute(
             "INSERT INTO favorite
-               (source_id, stream_id, provider_id, name, logo, kind, category_id, added_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+               (source_id, stream_id, provider_id, name, logo, kind, category_id, added_at,
+                epg_channel_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(source_id, stream_id) DO NOTHING",
             params![
                 source_id,
@@ -381,6 +401,7 @@ impl Catalog for SqliteCatalog {
                 kind_to_str(stream.kind),
                 category_id,
                 added_at,
+                stream.epg_channel_id,
             ],
         )
         .map_err(|e| store("add favorite", e))?;
@@ -401,8 +422,8 @@ impl Catalog for SqliteCatalog {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT stream_id, provider_id, name, logo, kind, category_id FROM favorite
-                 WHERE source_id = ?1 ORDER BY added_at DESC",
+                "SELECT stream_id, provider_id, name, logo, kind, category_id, epg_channel_id
+                 FROM favorite WHERE source_id = ?1 ORDER BY added_at DESC",
             )
             .map_err(|e| store("prepare favorites", e))?;
         let rows = stmt
@@ -418,15 +439,17 @@ impl Catalog for SqliteCatalog {
         let category_id = stream.category_id.as_ref().map(|c| c.0.clone());
         conn.execute(
             "INSERT INTO history
-               (source_id, stream_id, provider_id, name, logo, kind, category_id, watched_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+               (source_id, stream_id, provider_id, name, logo, kind, category_id, watched_at,
+                epg_channel_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(source_id, stream_id) DO UPDATE SET
                  provider_id = excluded.provider_id,
                  name = excluded.name,
                  logo = excluded.logo,
                  kind = excluded.kind,
                  category_id = excluded.category_id,
-                 watched_at = excluded.watched_at",
+                 watched_at = excluded.watched_at,
+                 epg_channel_id = excluded.epg_channel_id",
             params![
                 source_id,
                 stream.id.0,
@@ -436,6 +459,7 @@ impl Catalog for SqliteCatalog {
                 kind_to_str(stream.kind),
                 category_id,
                 watched_at,
+                stream.epg_channel_id,
             ],
         )
         .map_err(|e| store("record watch", e))?;
@@ -446,8 +470,8 @@ impl Catalog for SqliteCatalog {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT stream_id, provider_id, name, logo, kind, category_id FROM history
-                 WHERE source_id = ?1 ORDER BY watched_at DESC",
+                "SELECT stream_id, provider_id, name, logo, kind, category_id, epg_channel_id
+                 FROM history WHERE source_id = ?1 ORDER BY watched_at DESC",
             )
             .map_err(|e| store("prepare history", e))?;
         let rows = stmt
@@ -655,5 +679,32 @@ mod tests {
         assert_eq!(cat.favorites("a").unwrap().len(), 1);
         cat.set_setting("k", "v").unwrap();
         assert_eq!(cat.get_setting("k").unwrap(), Some("v".to_string()));
+    }
+
+    #[test]
+    fn epg_channel_id_round_trips_through_caches() {
+        let cat = SqliteCatalog::open_in_memory().unwrap();
+        let mut stream = Stream::new("a", "1", "One", StreamKind::Live);
+        stream.epg_channel_id = Some("bbc1.uk".to_string());
+
+        cat.replace_streams("a", "sports", std::slice::from_ref(&stream))
+            .unwrap();
+        cat.add_favorite("a", &stream).unwrap();
+        cat.record_watch("a", &stream).unwrap();
+
+        assert_eq!(
+            cat.streams("a", "sports").unwrap()[0]
+                .epg_channel_id
+                .as_deref(),
+            Some("bbc1.uk")
+        );
+        assert_eq!(
+            cat.favorites("a").unwrap()[0].epg_channel_id.as_deref(),
+            Some("bbc1.uk")
+        );
+        assert_eq!(
+            cat.history("a").unwrap()[0].epg_channel_id.as_deref(),
+            Some("bbc1.uk")
+        );
     }
 }
