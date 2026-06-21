@@ -92,6 +92,23 @@ pub fn Close(class: String) -> Element {
 }
 
 #[component]
+pub fn Copy(class: String) -> Element {
+    icon(
+        class,
+        "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 \
+         2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z",
+    )
+}
+
+#[component]
+pub fn Trash(class: String) -> Element {
+    icon(
+        class,
+        "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+    )
+}
+
+#[component]
 pub fn Bug(class: String) -> Element {
     icon(
         class,

@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, LogLevel, NowNext, Programme, Settings, Stream};
+use cathode_core::model::{Category, LogLevel, LogLine, NowNext, Programme, Settings, Stream};
 use cathode_core::sources::xtream::XtreamCredentials;
 use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::prelude::*;
@@ -258,7 +258,7 @@ struct LogLevelArgs {
 }
 
 /// The captured debug-log lines, oldest first.
-pub async fn get_logs() -> Result<Vec<String>, AppError> {
+pub async fn get_logs() -> Result<Vec<LogLine>, AppError> {
     call("get_logs", &NoArgs {}).await
 }
 
