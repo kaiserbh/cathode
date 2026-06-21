@@ -16,6 +16,19 @@ use crate::format::hhmm;
 /// How long the pointer must be still before the controls hide, in milliseconds.
 const IDLE_MS: f64 = 2500.0;
 const ICON: &str = "h-5 w-5";
+/// The large centered icon for the shortcut feedback HUD.
+const HUD_ICON: &str = "h-10 w-10";
+/// How long the shortcut HUD stays on screen, in milliseconds.
+const HUD_MS: u32 = 800;
+
+/// A transient, centered overlay shown when a playback shortcut fires.
+#[derive(Clone, Copy, PartialEq)]
+enum Hud {
+    Volume(u8),
+    Muted,
+    Playing,
+    Paused,
+}
 
 #[component]
 pub fn PlayerOverlay(
@@ -43,6 +56,22 @@ pub fn PlayerOverlay(
                 let _ = node.set_focus(true).await;
             });
         }
+    });
+
+    // The transient shortcut HUD. A sequence id ensures a newer HUD isn't cut short by
+    // an older one's timer.
+    let mut hud = use_signal(|| None::<Hud>);
+    let mut hud_seq = use_signal(|| 0u32);
+    let show_hud = use_callback(move |h: Hud| {
+        let id = hud_seq() + 1;
+        hud_seq.set(id);
+        hud.set(Some(h));
+        spawn(async move {
+            TimeoutFuture::new(HUD_MS).await;
+            if hud_seq() == id {
+                hud.set(None);
+            }
+        });
     });
 
     use_future(move || async move {
@@ -77,27 +106,60 @@ pub fn PlayerOverlay(
                 }
             },
             // Click the video (anywhere not on the bar) toggles play/pause.
-            onclick: move |_| on_toggle_pause.call(()),
+            onclick: move |_| {
+                on_toggle_pause.call(());
+                show_hud.call(if paused { Hud::Playing } else { Hud::Paused });
+            },
             onkeydown: move |e| {
                 match e.key() {
                     Key::Character(c) if c == " " => {
                         e.prevent_default();
                         on_toggle_pause.call(());
+                        show_hud.call(if paused { Hud::Playing } else { Hud::Paused });
                     }
-                    Key::Character(c) if c.eq_ignore_ascii_case("m") => on_toggle_mute.call(()),
-                    Key::Character(c) if c.eq_ignore_ascii_case("f") => on_toggle_fullscreen.call(()),
+                    Key::Character(c) if c.eq_ignore_ascii_case("m") => {
+                        let now_muted = !muted;
+                        on_toggle_mute.call(());
+                        show_hud.call(if now_muted { Hud::Muted } else { Hud::Volume(volume) });
+                    }
+                    Key::Character(c) if c.eq_ignore_ascii_case("f") => {
+                        on_toggle_fullscreen.call(())
+                    }
                     Key::ArrowUp => {
                         e.prevent_default();
-                        on_set_volume.call((volume + 5).min(100));
+                        let v = (volume + 5).min(100);
+                        on_set_volume.call(v);
+                        show_hud.call(Hud::Volume(v));
                     }
                     Key::ArrowDown => {
                         e.prevent_default();
-                        on_set_volume.call(volume.saturating_sub(5));
+                        let v = volume.saturating_sub(5);
+                        on_set_volume.call(v);
+                        show_hud.call(Hud::Volume(v));
                     }
                     Key::Escape => on_stop.call(()),
                     _ => {}
                 }
             },
+            // Transient shortcut feedback (volume / mute / play-pause), centered.
+            if let Some(h) = hud() {
+                div {
+                    class: "pointer-events-none absolute inset-0 flex items-center justify-center",
+                    div {
+                        class: "flex flex-col items-center gap-1 rounded-2xl bg-black/70 px-7 py-6 \
+                            text-white backdrop-blur-sm",
+                        {match h {
+                            Hud::Volume(_) => rsx! { VolumeHigh { class: HUD_ICON } },
+                            Hud::Muted => rsx! { VolumeMuted { class: HUD_ICON } },
+                            Hud::Playing => rsx! { Play { class: HUD_ICON } },
+                            Hud::Paused => rsx! { Pause { class: HUD_ICON } },
+                        }}
+                        if let Hud::Volume(v) = h {
+                            span { class: "text-lg font-semibold", "{v}%" }
+                        }
+                    }
+                }
+            }
             div {
                 class: "flex items-center gap-3 bg-black/60 p-3 text-white backdrop-blur-sm \
                     transition-opacity duration-300 {bar_visibility}",
@@ -105,31 +167,31 @@ pub fn PlayerOverlay(
                 // After a click or a finished slider drag, hand focus back to the root
                 // so the keyboard shortcuts keep working without clicking the video.
                 onpointerup: move |_| refocus.call(()),
-                div {
-                    class: "min-w-0 flex-1",
+                div { class: "min-w-0 flex-1",
                     span { class: "block truncate text-sm font-medium", "{stream.name}" }
                     if let Some(nn) = now_next.as_ref() {
                         if let Some(now) = nn.now.as_ref() {
-                            span {
-                                class: "block truncate text-xs text-white/70",
+                            span { class: "block truncate text-xs text-white/70",
                                 "Now: {now.title} · {hhmm(now.start)}–{hhmm(now.stop)}"
                             }
                         }
                         if let Some(next) = nn.next.as_ref() {
-                            span {
-                                class: "block truncate text-[11px] text-white/50",
+                            span { class: "block truncate text-[11px] text-white/50",
                                 "Next: {next.title} · {hhmm(next.start)}"
                             }
                         }
                     }
                 }
-                div {
-                    class: "flex items-center gap-1",
+                div { class: "flex items-center gap-1",
                     button {
                         class: BTN,
                         title: if paused { "Play" } else { "Pause" },
                         onclick: move |_| on_toggle_pause.call(()),
-                        if paused { Play { class: ICON } } else { Pause { class: ICON } }
+                        if paused {
+                            Play { class: ICON }
+                        } else {
+                            Pause { class: ICON }
+                        }
                     }
                     button {
                         class: BTN,
@@ -141,7 +203,11 @@ pub fn PlayerOverlay(
                         class: BTN,
                         title: if silent { "Unmute" } else { "Mute" },
                         onclick: move |_| on_toggle_mute.call(()),
-                        if silent { VolumeMuted { class: ICON } } else { VolumeHigh { class: ICON } }
+                        if silent {
+                            VolumeMuted { class: ICON }
+                        } else {
+                            VolumeHigh { class: ICON }
+                        }
                     }
                     input {
                         r#type: "range",
