@@ -281,10 +281,17 @@ pub fn Browse() -> Element {
     // While playing, render a transparent overlay so the embedded mpv surface
     // shows through; otherwise render the opaque browse UI.
     if let Some(stream) = playing() {
+        // Show the playing channel's now/next when EPG is on and we have a match.
+        let now_next = stream
+            .epg_channel_id
+            .as_ref()
+            .filter(|_| settings().epg_enabled)
+            .and_then(|id| epg.read().get(id).cloned());
         return rsx! {
             PlayerOverlay {
                 stream,
                 paused: paused(),
+                now_next,
                 on_pause,
                 on_resume,
                 on_stop,
