@@ -6,5 +6,5 @@
 pub mod r#match;
 pub mod parse;
 
-pub use parse::parse_xmltv;
-pub use r#match::now_next;
+pub use parse::{parse_xmltv, EpgChannel, Guide};
+pub use r#match::{name_index, normalize_name, now_next};
