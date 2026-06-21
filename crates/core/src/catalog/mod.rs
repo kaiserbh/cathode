@@ -12,7 +12,7 @@
 //! cleanly rather than duplicating.
 
 use crate::error::CoreError;
-use crate::model::{Category, Stream};
+use crate::model::{Category, Stream, StreamKind};
 
 /// A persisted source, opaque to the catalog: `payload` is a serialized,
 /// source-kind-specific credential blob (for Xtream, JSON of `XtreamCredentials`).
@@ -40,23 +40,38 @@ pub trait Catalog {
     /// favorites, and history).
     fn delete_source(&self, id: &str) -> Result<(), CoreError>;
 
-    /// Replace the cached categories for a source with the given set.
-    fn replace_categories(&self, source_id: &str, categories: &[Category])
-        -> Result<(), CoreError>;
+    /// Replace the cached categories for a `(source, kind)` with the given set.
+    /// Content kinds (Live/VOD/Series) are isolated: their category ids may collide.
+    fn replace_categories(
+        &self,
+        source_id: &str,
+        kind: StreamKind,
+        categories: &[Category],
+    ) -> Result<(), CoreError>;
 
-    /// The cached categories for a source (empty if none cached).
-    fn categories(&self, source_id: &str) -> Result<Vec<Category>, CoreError>;
+    /// The cached categories for a `(source, kind)` (empty if none cached).
+    fn categories(&self, source_id: &str, kind: StreamKind) -> Result<Vec<Category>, CoreError>;
 
-    /// Replace the cached streams for a `(source, category)` with the given set.
+    /// Replace the cached streams for a `(source, kind, category)` with the given set.
     fn replace_streams(
         &self,
         source_id: &str,
+        kind: StreamKind,
         category_id: &str,
         streams: &[Stream],
     ) -> Result<(), CoreError>;
 
-    /// The cached streams for a `(source, category)` (empty if none cached).
-    fn streams(&self, source_id: &str, category_id: &str) -> Result<Vec<Stream>, CoreError>;
+    /// The cached streams for a `(source, kind, category)` (empty if none cached).
+    fn streams(
+        &self,
+        source_id: &str,
+        kind: StreamKind,
+        category_id: &str,
+    ) -> Result<Vec<Stream>, CoreError>;
+
+    /// Search a source's cached streams (every kind and category) by name,
+    /// case-insensitive, most relevant first. Covers whatever has been synced.
+    fn search_streams(&self, source_id: &str, query: &str) -> Result<Vec<Stream>, CoreError>;
 
     /// A persisted app setting value, or `None` if unset. Settings are a generic
     /// key/value store; callers (de)serialize structured values themselves.
@@ -99,8 +114,8 @@ mod tests {
     struct FakeCatalog {
         seq: RefCell<u64>,
         sources: RefCell<HashMap<String, (SourceRecord, u64)>>,
-        categories: RefCell<HashMap<String, Vec<Category>>>,
-        streams: RefCell<HashMap<(String, String), Vec<Stream>>>,
+        categories: RefCell<HashMap<(String, StreamKind), Vec<Category>>>,
+        streams: RefCell<HashMap<(String, StreamKind, String), Vec<Stream>>>,
         settings: RefCell<HashMap<String, String>>,
         // Per source: each stream tagged with the seq at which it was added/watched,
         // so we can order most-recent-first deterministically.
@@ -147,8 +162,8 @@ mod tests {
 
         fn delete_source(&self, id: &str) -> Result<(), CoreError> {
             self.sources.borrow_mut().remove(id);
-            self.categories.borrow_mut().remove(id);
-            self.streams.borrow_mut().retain(|(sid, _), _| sid != id);
+            self.categories.borrow_mut().retain(|(sid, _), _| sid != id);
+            self.streams.borrow_mut().retain(|(sid, _, _), _| sid != id);
             self.favorites.borrow_mut().remove(id);
             self.history.borrow_mut().remove(id);
             Ok(())
@@ -157,19 +172,24 @@ mod tests {
         fn replace_categories(
             &self,
             source_id: &str,
+            kind: StreamKind,
             categories: &[Category],
         ) -> Result<(), CoreError> {
             self.categories
                 .borrow_mut()
-                .insert(source_id.to_string(), categories.to_vec());
+                .insert((source_id.to_string(), kind), categories.to_vec());
             Ok(())
         }
 
-        fn categories(&self, source_id: &str) -> Result<Vec<Category>, CoreError> {
+        fn categories(
+            &self,
+            source_id: &str,
+            kind: StreamKind,
+        ) -> Result<Vec<Category>, CoreError> {
             Ok(self
                 .categories
                 .borrow()
-                .get(source_id)
+                .get(&(source_id.to_string(), kind))
                 .cloned()
                 .unwrap_or_default())
         }
@@ -177,23 +197,47 @@ mod tests {
         fn replace_streams(
             &self,
             source_id: &str,
+            kind: StreamKind,
             category_id: &str,
             streams: &[Stream],
         ) -> Result<(), CoreError> {
             self.streams.borrow_mut().insert(
-                (source_id.to_string(), category_id.to_string()),
+                (source_id.to_string(), kind, category_id.to_string()),
                 streams.to_vec(),
             );
             Ok(())
         }
 
-        fn streams(&self, source_id: &str, category_id: &str) -> Result<Vec<Stream>, CoreError> {
+        fn streams(
+            &self,
+            source_id: &str,
+            kind: StreamKind,
+            category_id: &str,
+        ) -> Result<Vec<Stream>, CoreError> {
             Ok(self
                 .streams
                 .borrow()
-                .get(&(source_id.to_string(), category_id.to_string()))
+                .get(&(source_id.to_string(), kind, category_id.to_string()))
                 .cloned()
                 .unwrap_or_default())
+        }
+
+        fn search_streams(&self, source_id: &str, query: &str) -> Result<Vec<Stream>, CoreError> {
+            let needle = query.to_lowercase();
+            let mut seen = std::collections::HashSet::new();
+            let mut out = Vec::new();
+            for ((sid, _, _), streams) in self.streams.borrow().iter() {
+                if sid != source_id {
+                    continue;
+                }
+                for s in streams {
+                    if s.name.to_lowercase().contains(&needle) && seen.insert(s.id.clone()) {
+                        out.push(s.clone());
+                    }
+                }
+            }
+            out.sort_by(|a, b| a.name.cmp(&b.name));
+            Ok(out)
         }
 
         fn get_setting(&self, key: &str) -> Result<Option<String>, CoreError> {
@@ -291,16 +335,25 @@ mod tests {
             id: CategoryId("2".to_string()),
             name: "News".to_string(),
         };
-        cat.replace_categories("src-a", &[sports.clone(), news.clone()])
+        cat.replace_categories("src-a", StreamKind::Live, &[sports.clone(), news.clone()])
             .unwrap();
-        assert_eq!(cat.categories("src-a").unwrap(), vec![sports, news.clone()]);
+        assert_eq!(
+            cat.categories("src-a", StreamKind::Live).unwrap(),
+            vec![sports, news.clone()]
+        );
 
         // A re-sync replaces, not appends.
-        cat.replace_categories("src-a", std::slice::from_ref(&news))
+        cat.replace_categories("src-a", StreamKind::Live, std::slice::from_ref(&news))
             .unwrap();
-        assert_eq!(cat.categories("src-a").unwrap(), vec![news]);
+        assert_eq!(
+            cat.categories("src-a", StreamKind::Live).unwrap(),
+            vec![news]
+        );
         // Another source is untouched and empty.
-        assert!(cat.categories("src-b").unwrap().is_empty());
+        assert!(cat
+            .categories("src-b", StreamKind::Live)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
@@ -308,13 +361,80 @@ mod tests {
         let cat = FakeCatalog::default();
         let s1 = Stream::new("src-a", "1", "One", StreamKind::Live);
         let s2 = Stream::new("src-a", "2", "Two", StreamKind::Live);
-        cat.replace_streams("src-a", "sports", &[s1.clone(), s2.clone()])
+        cat.replace_streams(
+            "src-a",
+            StreamKind::Live,
+            "sports",
+            &[s1.clone(), s2.clone()],
+        )
+        .unwrap();
+
+        assert_eq!(
+            cat.streams("src-a", StreamKind::Live, "sports").unwrap(),
+            vec![s1, s2]
+        );
+        // Different category, and different source, are separate buckets.
+        assert!(cat
+            .streams("src-a", StreamKind::Live, "news")
+            .unwrap()
+            .is_empty());
+        assert!(cat
+            .streams("src-b", StreamKind::Live, "sports")
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn cache_is_isolated_by_kind() {
+        // Live and VOD can share a category id; they must not collide.
+        let cat = FakeCatalog::default();
+        let live = Stream::new("src-a", "1", "Live One", StreamKind::Live);
+        let movie = Stream::new("src-a", "1", "Movie One", StreamKind::Vod);
+        cat.replace_streams("src-a", StreamKind::Live, "5", std::slice::from_ref(&live))
+            .unwrap();
+        cat.replace_streams("src-a", StreamKind::Vod, "5", std::slice::from_ref(&movie))
             .unwrap();
 
-        assert_eq!(cat.streams("src-a", "sports").unwrap(), vec![s1, s2]);
-        // Different category, and different source, are separate buckets.
-        assert!(cat.streams("src-a", "news").unwrap().is_empty());
-        assert!(cat.streams("src-b", "sports").unwrap().is_empty());
+        assert_eq!(
+            cat.streams("src-a", StreamKind::Live, "5").unwrap(),
+            vec![live]
+        );
+        assert_eq!(
+            cat.streams("src-a", StreamKind::Vod, "5").unwrap(),
+            vec![movie]
+        );
+    }
+
+    #[test]
+    fn search_matches_across_categories_and_kinds() {
+        let cat = FakeCatalog::default();
+        let sky_live = Stream::new("src-a", "1", "Sky Sports", StreamKind::Live);
+        let skyfall = Stream::new("src-a", "2", "Skyfall", StreamKind::Vod);
+        let other = Stream::new("src-a", "3", "BBC One", StreamKind::Live);
+        cat.replace_streams(
+            "src-a",
+            StreamKind::Live,
+            "sports",
+            &[sky_live.clone(), other],
+        )
+        .unwrap();
+        cat.replace_streams(
+            "src-a",
+            StreamKind::Vod,
+            "films",
+            std::slice::from_ref(&skyfall),
+        )
+        .unwrap();
+
+        let names: Vec<_> = cat
+            .search_streams("src-a", "sky")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+        assert_eq!(names, vec!["Sky Sports".to_string(), "Skyfall".to_string()]);
+        // Scoped to the source.
+        assert!(cat.search_streams("src-b", "sky").unwrap().is_empty());
     }
 
     #[test]
@@ -323,14 +443,20 @@ mod tests {
         cat.upsert_source(&record("a")).unwrap();
         cat.replace_categories(
             "a",
+            StreamKind::Live,
             &[Category {
                 id: CategoryId("1".to_string()),
                 name: "Sports".to_string(),
             }],
         )
         .unwrap();
-        cat.replace_streams("a", "1", &[Stream::new("a", "9", "Nine", StreamKind::Live)])
-            .unwrap();
+        cat.replace_streams(
+            "a",
+            StreamKind::Live,
+            "1",
+            &[Stream::new("a", "9", "Nine", StreamKind::Live)],
+        )
+        .unwrap();
         cat.add_favorite("a", &Stream::new("a", "9", "Nine", StreamKind::Live))
             .unwrap();
         cat.record_watch("a", &Stream::new("a", "9", "Nine", StreamKind::Live))
@@ -339,8 +465,8 @@ mod tests {
         cat.delete_source("a").unwrap();
 
         assert!(cat.sources().unwrap().is_empty());
-        assert!(cat.categories("a").unwrap().is_empty());
-        assert!(cat.streams("a", "1").unwrap().is_empty());
+        assert!(cat.categories("a", StreamKind::Live).unwrap().is_empty());
+        assert!(cat.streams("a", StreamKind::Live, "1").unwrap().is_empty());
         assert!(cat.favorites("a").unwrap().is_empty());
         assert!(cat.history("a").unwrap().is_empty());
     }

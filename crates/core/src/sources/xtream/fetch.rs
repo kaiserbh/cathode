@@ -5,30 +5,70 @@
 //! URL, fetches the body, and hands it to the matching parser.
 
 use crate::error::CoreError;
-use crate::model::{Category, Stream};
+use crate::model::{Category, SeriesInfo, Stream, StreamKind};
 use crate::transport::Transport;
 
-use super::{parse_live_categories, parse_live_streams, XtreamSource};
+use super::parse::{
+    parse_categories, parse_live_streams, parse_series, parse_series_info, parse_vod_streams,
+};
+use super::XtreamSource;
 
-/// Fetch and parse the live categories for a source.
-pub async fn fetch_live_categories<T: Transport>(
-    source: &XtreamSource,
-    transport: &T,
-) -> Result<Vec<Category>, CoreError> {
-    let url = source.player_api_url("get_live_categories", None);
-    let body = transport.get_text(&url).await?;
-    parse_live_categories(&body)
+/// The `player_api.php` action for a content kind's category list.
+fn categories_action(kind: StreamKind) -> &'static str {
+    match kind {
+        StreamKind::Live => "get_live_categories",
+        StreamKind::Vod => "get_vod_categories",
+        StreamKind::Series => "get_series_categories",
+    }
 }
 
-/// Fetch and parse the live streams for a source, optionally scoped to a category.
-pub async fn fetch_live_streams<T: Transport>(
+/// The `player_api.php` action for a content kind's stream/series list.
+fn streams_action(kind: StreamKind) -> &'static str {
+    match kind {
+        StreamKind::Live => "get_live_streams",
+        StreamKind::Vod => "get_vod_streams",
+        StreamKind::Series => "get_series",
+    }
+}
+
+/// Fetch and parse the categories of a given content kind for a source.
+pub async fn fetch_categories<T: Transport>(
     source: &XtreamSource,
     transport: &T,
+    kind: StreamKind,
+) -> Result<Vec<Category>, CoreError> {
+    let url = source.player_api_url(categories_action(kind), None);
+    let body = transport.get_text(&url).await?;
+    parse_categories(&body)
+}
+
+/// Fetch and parse the streams of a given content kind for a source, optionally
+/// scoped to a category. Series come back as entries to drill into, not playables.
+pub async fn fetch_streams<T: Transport>(
+    source: &XtreamSource,
+    transport: &T,
+    kind: StreamKind,
     category_id: Option<&str>,
 ) -> Result<Vec<Stream>, CoreError> {
-    let url = source.player_api_url("get_live_streams", category_id);
+    let url = source.player_api_url(streams_action(kind), category_id);
     let body = transport.get_text(&url).await?;
-    parse_live_streams(&body, &source.source_id())
+    let source_id = source.source_id();
+    match kind {
+        StreamKind::Live => parse_live_streams(&body, &source_id),
+        StreamKind::Vod => parse_vod_streams(&body, &source_id),
+        StreamKind::Series => parse_series(&body, &source_id),
+    }
+}
+
+/// Fetch and parse the seasons/episodes for one series.
+pub async fn fetch_series_info<T: Transport>(
+    source: &XtreamSource,
+    transport: &T,
+    series_id: &str,
+) -> Result<SeriesInfo, CoreError> {
+    let url = source.series_info_url(series_id);
+    let body = transport.get_text(&url).await?;
+    parse_series_info(&body)
 }
 
 #[cfg(test)]
@@ -80,7 +120,8 @@ mod tests {
     #[test]
     fn fetches_categories_from_the_right_url() {
         let transport = FakeTransport::new(CATEGORIES_JSON);
-        let categories = pollster::block_on(fetch_live_categories(&source(), &transport)).unwrap();
+        let categories =
+            pollster::block_on(fetch_categories(&source(), &transport, StreamKind::Live)).unwrap();
 
         assert_eq!(categories.len(), 2);
         assert_eq!(
@@ -92,8 +133,13 @@ mod tests {
     #[test]
     fn fetches_streams_with_category_filter() {
         let transport = FakeTransport::new(STREAMS_JSON);
-        let streams =
-            pollster::block_on(fetch_live_streams(&source(), &transport, Some("1"))).unwrap();
+        let streams = pollster::block_on(fetch_streams(
+            &source(),
+            &transport,
+            StreamKind::Live,
+            Some("1"),
+        ))
+        .unwrap();
 
         assert_eq!(streams.len(), 3);
         assert!(streams.iter().all(|s| s.kind == StreamKind::Live));
@@ -104,9 +150,34 @@ mod tests {
     }
 
     #[test]
+    fn vod_streams_use_the_vod_action() {
+        let transport = FakeTransport::new("[]");
+        let _ = pollster::block_on(fetch_streams(&source(), &transport, StreamKind::Vod, None));
+        assert_eq!(
+            transport.requested_url().unwrap(),
+            "http://host:8080/player_api.php?username=user&password=pass&action=get_vod_streams"
+        );
+    }
+
+    #[test]
+    fn series_use_the_series_action() {
+        let transport = FakeTransport::new("[]");
+        let _ = pollster::block_on(fetch_streams(
+            &source(),
+            &transport,
+            StreamKind::Series,
+            None,
+        ));
+        assert_eq!(
+            transport.requested_url().unwrap(),
+            "http://host:8080/player_api.php?username=user&password=pass&action=get_series"
+        );
+    }
+
+    #[test]
     fn propagates_parse_errors() {
         let transport = FakeTransport::new("not json");
-        let result = pollster::block_on(fetch_live_categories(&source(), &transport));
+        let result = pollster::block_on(fetch_categories(&source(), &transport, StreamKind::Live));
         assert!(matches!(result, Err(CoreError::Json { .. })));
     }
 }

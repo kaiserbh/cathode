@@ -9,8 +9,10 @@ pub mod api;
 pub mod fetch;
 pub mod parse;
 
-pub use fetch::{fetch_live_categories, fetch_live_streams};
-pub use parse::{parse_live_categories, parse_live_streams};
+pub use fetch::{fetch_categories, fetch_series_info, fetch_streams};
+pub use parse::{
+    parse_categories, parse_live_streams, parse_series, parse_series_info, parse_vod_streams,
+};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::{Deserialize, Serialize};
@@ -112,6 +114,30 @@ impl XtreamSource {
         )
     }
 
+    /// Build the playable URL for a VOD (movie) stream.
+    pub fn vod_stream_url(&self, stream_id: &str, ext: &str) -> String {
+        format!(
+            "{}/movie/{}/{}/{}.{}",
+            self.base_url, self.username, self.password, stream_id, ext
+        )
+    }
+
+    /// Build the playable URL for a series episode (by its episode id).
+    pub fn series_episode_url(&self, episode_id: &str, ext: &str) -> String {
+        format!(
+            "{}/series/{}/{}/{}.{}",
+            self.base_url, self.username, self.password, episode_id, ext
+        )
+    }
+
+    /// Build the `get_series_info` request URL for one series.
+    pub fn series_info_url(&self, series_id: &str) -> String {
+        let mut url = self.player_api_url("get_series_info", None);
+        url.push_str("&series_id=");
+        url.push_str(&encode(series_id));
+        url
+    }
+
     /// Build the XMLTV guide URL for the whole account. Credentials are
     /// percent-encoded for the query.
     pub fn xmltv_url(&self) -> String {
@@ -194,6 +220,26 @@ mod tests {
         assert_eq!(
             source().live_stream_url("1001", "ts"),
             "http://host:8080/live/user/pass/1001.ts"
+        );
+    }
+
+    #[test]
+    fn vod_and_series_urls_use_path_style() {
+        assert_eq!(
+            source().vod_stream_url("2002", "mkv"),
+            "http://host:8080/movie/user/pass/2002.mkv"
+        );
+        assert_eq!(
+            source().series_episode_url("3003", "mp4"),
+            "http://host:8080/series/user/pass/3003.mp4"
+        );
+    }
+
+    #[test]
+    fn series_info_url_appends_series_id() {
+        assert_eq!(
+            source().series_info_url("42"),
+            "http://host:8080/player_api.php?username=user&password=pass&action=get_series_info&series_id=42"
         );
     }
 
