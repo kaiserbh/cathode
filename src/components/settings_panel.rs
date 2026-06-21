@@ -2,7 +2,7 @@
 //! history (persisted), a session-only incognito switch that pauses recording, and
 //! a button to erase history. Presentational; `Browse` owns the state.
 
-use cathode_core::model::Settings;
+use cathode_core::model::{ChannelView, Settings};
 use dioxus::prelude::*;
 
 use crate::components::Toggle;
@@ -13,6 +13,8 @@ pub fn SettingsPanel(
     incognito: bool,
     on_toggle_favorites: EventHandler<bool>,
     on_toggle_history: EventHandler<bool>,
+    on_toggle_epg: EventHandler<bool>,
+    on_set_view: EventHandler<ChannelView>,
     on_toggle_incognito: EventHandler<bool>,
     on_clear_history: EventHandler<()>,
     on_close: EventHandler<()>,
@@ -53,6 +55,37 @@ pub fn SettingsPanel(
                         on_toggle: on_toggle_history,
                     }
                     ToggleRow {
+                        label: "Program guide (EPG)",
+                        description: "Fetch and show Now / Next on channels.",
+                        value: settings.epg_enabled,
+                        on_toggle: on_toggle_epg,
+                    }
+                    div {
+                        class: "flex items-center justify-between px-5 py-4",
+                        div {
+                            span { class: "block text-sm font-medium", "Channel view" }
+                            span {
+                                class: "block text-xs text-neutral-500",
+                                "How channels are laid out."
+                            }
+                        }
+                        div {
+                            class: "flex gap-1 rounded-lg bg-neutral-200 p-0.5 dark:bg-neutral-800",
+                            ViewButton {
+                                label: "Grid",
+                                view: ChannelView::Grid,
+                                current: settings.channel_view,
+                                on_set_view,
+                            }
+                            ViewButton {
+                                label: "List",
+                                view: ChannelView::List,
+                                current: settings.channel_view,
+                                on_set_view,
+                            }
+                        }
+                    }
+                    ToggleRow {
                         label: "Incognito",
                         description: "Pause recording for this session only.",
                         value: incognito,
@@ -77,6 +110,27 @@ pub fn SettingsPanel(
                     }
                 }
             }
+        }
+    }
+}
+
+#[component]
+fn ViewButton(
+    label: String,
+    view: ChannelView,
+    current: ChannelView,
+    on_set_view: EventHandler<ChannelView>,
+) -> Element {
+    let state = if view == current {
+        "bg-white text-neutral-900 shadow-sm dark:bg-neutral-600 dark:text-white"
+    } else {
+        "text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
+    };
+    rsx! {
+        button {
+            class: "rounded-md px-3 py-1 text-sm font-medium focus:outline-none {state}",
+            onclick: move |_| on_set_view.call(view),
+            "{label}"
         }
     }
 }
