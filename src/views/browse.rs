@@ -577,9 +577,11 @@ pub fn Browse() -> Element {
                                 main {
                                     class: "flex-1 min-h-0 overflow-y-auto",
                                     if selected().is_none() {
-                                        p {
-                                            class: "p-6 text-sm text-neutral-500",
-                                            "Pick a category to start browsing."
+                                        div {
+                                            class: "flex h-full flex-col items-center justify-center \
+                                                gap-3 text-neutral-400",
+                                            crate::components::icons::Category { class: "h-12 w-12".to_string() }
+                                            p { class: "text-sm", "Pick a category to start browsing." }
                                         }
                                     } else if loading() && streams().is_empty() {
                                         Spinner {}
