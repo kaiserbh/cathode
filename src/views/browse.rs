@@ -21,7 +21,7 @@ use gloo_timers::future::TimeoutFuture;
 use crate::bindings;
 use crate::components::{
     CategoryList, ChannelPane, LogsPanel, PlayerOverlay, SettingsPanel, SourcesPanel, Spinner, Tab,
-    TabBar, TitleBar,
+    TabBar, TitleBar, Toast,
 };
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
@@ -50,6 +50,8 @@ pub fn Browse() -> Element {
     let mut show_settings = use_signal(|| false);
     let mut show_logs = use_signal(|| false);
     let mut logs = use_signal(Vec::<LogLine>::new);
+    let mut toast = use_signal(|| None::<String>);
+    let mut toast_seq = use_signal(|| 0u32);
     let mut tab = use_signal(|| Tab::Channels);
     let mut epg = use_signal(HashMap::<String, NowNext>::new);
     let mut programmes = use_signal(HashMap::<String, Vec<Programme>>::new);
@@ -191,6 +193,20 @@ pub fn Browse() -> Element {
                 }
             }
         }
+    });
+
+    // Briefly show a toast. A sequence id ensures a newer toast isn't cut short by an
+    // older one's timer.
+    let show_toast = use_callback(move |msg: String| {
+        let id = toast_seq() + 1;
+        toast_seq.set(id);
+        toast.set(Some(msg));
+        spawn(async move {
+            TimeoutFuture::new(2000).await;
+            if toast_seq() == id {
+                toast.set(None);
+            }
+        });
     });
 
     // Persist a settings change and reflect it locally.
@@ -608,7 +624,10 @@ pub fn Browse() -> Element {
                         })
                         .collect::<Vec<_>>()
                         .join("\n");
-                    spawn(crate::clipboard::copy(text));
+                    spawn(async move {
+                        crate::clipboard::copy(text).await;
+                        show_toast.call("Copied to clipboard".to_string());
+                    });
                 },
                 on_clear: move |_| {
                     logs.set(Vec::new());
@@ -618,6 +637,10 @@ pub fn Browse() -> Element {
                 },
                 on_close: move |_| show_logs.set(false),
             }
+        }
+
+        if let Some(msg) = toast() {
+            Toast { message: msg }
         }
     }
 }
