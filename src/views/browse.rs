@@ -1,17 +1,21 @@
 //! The browse screen: pick (or add) an Xtream account, then explore its live
-//! categories and channels. Owns all the state; the components are presentational.
+//! channels, favorites, and watch history. Owns all the state; components are
+//! presentational.
 //!
-//! Sources are persisted: on launch the most-recently-used account is auto-opened
-//! from cache and refreshed in the background, and a Sources panel switches between,
-//! adds, or removes accounts.
+//! Sources, favorites, history, and settings are persisted. On launch the
+//! most-recently-used account is auto-opened from cache and refreshed. An Options
+//! panel toggles features (favorites, history) and an incognito session switch;
+//! nothing is forced on the user.
 
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, CategoryId, Stream};
+use cathode_core::model::{Category, CategoryId, Settings, Stream, StreamId};
 use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
 
 use crate::bindings;
-use crate::components::{CategoryList, PlayerOverlay, SourcesPanel, Spinner, StreamGrid};
+use crate::components::{
+    CategoryList, PlayerOverlay, SettingsPanel, SourcesPanel, Spinner, StreamGrid, Tab, TabBar,
+};
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
 fn bump_source(mut sources: Signal<Vec<XtreamCredentials>>, c: XtreamCredentials) {
@@ -32,23 +36,44 @@ pub fn Browse() -> Element {
     let mut paused = use_signal(|| false);
     let mut sources = use_signal(Vec::<XtreamCredentials>::new);
     let mut show_sources = use_signal(|| false);
+    let mut settings = use_signal(Settings::default);
+    let mut incognito = use_signal(|| false);
+    let mut favorites = use_signal(Vec::<Stream>::new);
+    let mut history = use_signal(Vec::<Stream>::new);
+    let mut show_settings = use_signal(|| false);
+    let mut tab = use_signal(|| Tab::Channels);
 
-    // Make a source active: paint its cached categories instantly, then refresh
-    // from the network (which also persists the source and updates the cache).
+    // Make a source active: paint its cached channels instantly, refresh from the
+    // network, and load its favorites + history.
     let activate = use_callback(move |new_creds: XtreamCredentials| {
         creds.set(Some(new_creds.clone()));
         selected.set(None);
         streams.set(Vec::new());
         categories.set(Vec::new());
+        favorites.set(Vec::new());
+        history.set(Vec::new());
+        tab.set(Tab::Channels);
         error.set(None);
 
         let cached_creds = new_creds.clone();
         spawn(async move {
             if let Ok(cached) = bindings::cached_categories(&cached_creds).await {
-                // Only paint the cache if the network hasn't already answered.
                 if !cached.is_empty() && categories.read().is_empty() {
                     categories.set(cached);
                 }
+            }
+        });
+
+        let fav_creds = new_creds.clone();
+        spawn(async move {
+            if let Ok(list) = bindings::list_favorites(&fav_creds).await {
+                favorites.set(list);
+            }
+        });
+        let hist_creds = new_creds.clone();
+        spawn(async move {
+            if let Ok(list) = bindings::list_history(&hist_creds).await {
+                history.set(list);
             }
         });
 
@@ -62,7 +87,7 @@ pub fn Browse() -> Element {
         });
     });
 
-    // On launch, load saved accounts and auto-open the most recent one.
+    // On launch: load saved accounts (auto-open the most recent) and settings.
     use_future(move || async move {
         match bindings::saved_sources().await {
             Ok(list) if !list.is_empty() => {
@@ -75,6 +100,19 @@ pub fn Browse() -> Element {
                 show_sources.set(true);
             }
         }
+    });
+    use_future(move || async move {
+        if let Ok(s) = bindings::get_settings().await {
+            settings.set(s);
+        }
+    });
+
+    // Persist a settings change and reflect it locally.
+    let save_settings = use_callback(move |new: Settings| {
+        settings.set(new);
+        spawn(async move {
+            let _ = bindings::set_settings(&new).await;
+        });
     });
 
     let on_connect = move |new_creds: XtreamCredentials| {
@@ -99,6 +137,8 @@ pub fn Browse() -> Element {
             creds.set(None);
             categories.set(Vec::new());
             streams.set(Vec::new());
+            favorites.set(Vec::new());
+            history.set(Vec::new());
             selected.set(None);
         }
     };
@@ -131,20 +171,51 @@ pub fn Browse() -> Element {
         });
     };
 
-    let on_play = move |stream: Stream| {
+    let on_play = use_callback(move |stream: Stream| {
         let Some(current) = creds.read().clone() else {
             return;
         };
         let provider_id = stream.provider_id.clone();
-        playing.set(Some(stream));
+        playing.set(Some(stream.clone()));
         paused.set(false);
         error.set(None);
+
+        let play_creds = current.clone();
         spawn(async move {
-            if let Err(e) = bindings::play_stream(&current, &provider_id).await {
+            if let Err(e) = bindings::play_stream(&play_creds, &provider_id).await {
                 error.set(Some(e));
             }
         });
-    };
+
+        // Record to history only when enabled and not incognito.
+        if settings.read().history_enabled && !incognito() {
+            history.write().retain(|s| s.id != stream.id);
+            history.write().insert(0, stream.clone());
+            let watch_creds = current.clone();
+            spawn(async move {
+                let _ = bindings::record_watch(&watch_creds, &stream).await;
+            });
+        }
+    });
+
+    let toggle_favorite = use_callback(move |stream: Stream| {
+        let Some(current) = creds.read().clone() else {
+            return;
+        };
+        let is_favorite = favorites.read().iter().any(|s| s.id == stream.id);
+        if is_favorite {
+            favorites.write().retain(|s| s.id != stream.id);
+            let id = stream.id.0.clone();
+            spawn(async move {
+                let _ = bindings::remove_favorite(&current, &id).await;
+            });
+        } else {
+            favorites.write().insert(0, stream.clone());
+            spawn(async move {
+                let _ = bindings::add_favorite(&current, &stream).await;
+            });
+        }
+    });
 
     let on_pause = move |_| {
         paused.set(true);
@@ -180,6 +251,17 @@ pub fn Browse() -> Element {
     }
 
     let connected = creds.read().is_some();
+    let current_settings = settings();
+    let favorites_enabled = current_settings.favorites_enabled;
+    let history_enabled = current_settings.history_enabled;
+    let favorite_ids: Vec<StreamId> = favorites().iter().map(|s| s.id.clone()).collect();
+
+    // A disabled feature's tab falls back to Channels.
+    let current_tab = match tab() {
+        Tab::Favorites if !favorites_enabled => Tab::Channels,
+        Tab::History if !history_enabled => Tab::Channels,
+        t => t,
+    };
 
     rsx! {
         div {
@@ -188,13 +270,22 @@ pub fn Browse() -> Element {
             header {
                 class: "flex items-center justify-between border-b border-neutral-200 \
                     dark:border-neutral-800 p-4",
-                h1 { class: "text-lg font-semibold", "Cathode" }
-                button {
-                    class: "rounded-md border border-neutral-300 px-3 py-2 text-sm \
-                        font-medium hover:bg-neutral-100 focus:outline-none focus:ring-2 \
-                        focus:ring-sky-400 dark:border-neutral-700 dark:hover:bg-neutral-800",
-                    onclick: move |_| show_sources.set(!show_sources()),
-                    "Sources"
+                div {
+                    class: "flex items-center gap-3",
+                    h1 { class: "text-lg font-semibold", "Cathode" }
+                    if incognito() {
+                        span {
+                            class: "rounded-full bg-neutral-800 px-2 py-0.5 text-xs \
+                                font-medium text-neutral-100 dark:bg-neutral-200 \
+                                dark:text-neutral-900",
+                            "Incognito"
+                        }
+                    }
+                }
+                div {
+                    class: "flex items-center gap-2",
+                    HeaderButton { label: "Options", onclick: move |_| show_settings.set(!show_settings()) }
+                    HeaderButton { label: "Sources", onclick: move |_| show_sources.set(!show_sources()) }
                 }
             }
 
@@ -207,24 +298,75 @@ pub fn Browse() -> Element {
             }
 
             if connected {
-                div {
-                    class: "flex flex-col md:flex-row flex-1 min-h-0",
-                    CategoryList {
-                        categories: categories(),
-                        selected: selected(),
-                        on_select,
-                    }
-                    main {
-                        class: "flex-1 overflow-y-auto",
-                        // Show the spinner only when there's nothing cached to show.
-                        // With cached channels present we render them immediately and
-                        // let the background refresh swap in fresh data silently.
-                        if loading() && streams().is_empty() {
-                            Spinner {}
-                        } else {
-                            StreamGrid { streams: streams(), on_play }
+                TabBar {
+                    active: current_tab,
+                    show_favorites: favorites_enabled,
+                    show_history: history_enabled,
+                    on_select: move |t| tab.set(t),
+                }
+                match current_tab {
+                    Tab::Channels => rsx! {
+                        div {
+                            class: "flex flex-col md:flex-row flex-1 min-h-0",
+                            CategoryList {
+                                categories: categories(),
+                                selected: selected(),
+                                on_select,
+                            }
+                            main {
+                                class: "flex-1 overflow-y-auto",
+                                if loading() && streams().is_empty() {
+                                    Spinner {}
+                                } else {
+                                    StreamGrid {
+                                        streams: streams(),
+                                        favorites_enabled,
+                                        favorite_ids: favorite_ids.clone(),
+                                        on_play: move |s| on_play.call(s),
+                                        on_toggle_favorite: move |s| toggle_favorite.call(s),
+                                    }
+                                }
+                            }
                         }
-                    }
+                    },
+                    Tab::Favorites => rsx! {
+                        main {
+                            class: "flex-1 overflow-y-auto",
+                            if favorites().is_empty() {
+                                p {
+                                    class: "p-6 text-sm text-neutral-500",
+                                    "No favorites yet. Tap the star on a channel to add one."
+                                }
+                            } else {
+                                StreamGrid {
+                                    streams: favorites(),
+                                    favorites_enabled,
+                                    favorite_ids: favorite_ids.clone(),
+                                    on_play: move |s| on_play.call(s),
+                                    on_toggle_favorite: move |s| toggle_favorite.call(s),
+                                }
+                            }
+                        }
+                    },
+                    Tab::History => rsx! {
+                        main {
+                            class: "flex-1 overflow-y-auto",
+                            if history().is_empty() {
+                                p {
+                                    class: "p-6 text-sm text-neutral-500",
+                                    "Nothing watched yet."
+                                }
+                            } else {
+                                StreamGrid {
+                                    streams: history(),
+                                    favorites_enabled,
+                                    favorite_ids: favorite_ids.clone(),
+                                    on_play: move |s| on_play.call(s),
+                                    on_toggle_favorite: move |s| toggle_favorite.call(s),
+                                }
+                            }
+                        }
+                    },
                 }
             } else {
                 p {
@@ -244,6 +386,44 @@ pub fn Browse() -> Element {
                 on_connect,
                 on_close: move |_| show_sources.set(false),
             }
+        }
+
+        if show_settings() {
+            SettingsPanel {
+                settings: current_settings,
+                incognito: incognito(),
+                on_toggle_favorites: move |v| {
+                    let mut s = settings();
+                    s.favorites_enabled = v;
+                    save_settings.call(s);
+                },
+                on_toggle_history: move |v| {
+                    let mut s = settings();
+                    s.history_enabled = v;
+                    save_settings.call(s);
+                },
+                on_toggle_incognito: move |v| incognito.set(v),
+                on_clear_history: move |_| {
+                    history.set(Vec::new());
+                    spawn(async move {
+                        let _ = bindings::clear_history().await;
+                    });
+                },
+                on_close: move |_| show_settings.set(false),
+            }
+        }
+    }
+}
+
+#[component]
+fn HeaderButton(label: String, onclick: EventHandler<MouseEvent>) -> Element {
+    rsx! {
+        button {
+            class: "rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium \
+                hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-sky-400 \
+                dark:border-neutral-700 dark:hover:bg-neutral-800",
+            onclick: move |e| onclick.call(e),
+            "{label}"
         }
     }
 }

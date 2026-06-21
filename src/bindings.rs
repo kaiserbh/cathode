@@ -7,7 +7,7 @@
 //! `cathode_core` types.
 
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, Stream};
+use cathode_core::model::{Category, Settings, Stream};
 use cathode_core::sources::xtream::XtreamCredentials;
 use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::prelude::*;
@@ -38,6 +38,26 @@ struct StreamsArgs<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PlayArgs<'a> {
+    creds: &'a XtreamCredentials,
+    stream_id: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SettingsArgs<'a> {
+    settings: &'a Settings,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FavoriteArgs<'a> {
+    creds: &'a XtreamCredentials,
+    stream: &'a Stream,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoveFavoriteArgs<'a> {
     creds: &'a XtreamCredentials,
     stream_id: &'a str,
 }
@@ -138,4 +158,44 @@ pub async fn resume() -> Result<(), AppError> {
 
 pub async fn stop() -> Result<(), AppError> {
     call_unit("stop_playback", &NoArgs {}).await
+}
+
+/// Current feature settings (favorites/history toggles).
+pub async fn get_settings() -> Result<Settings, AppError> {
+    call("get_settings", &NoArgs {}).await
+}
+
+/// Persist feature settings.
+pub async fn set_settings(settings: &Settings) -> Result<(), AppError> {
+    call_unit("set_settings", &SettingsArgs { settings }).await
+}
+
+/// An account's favorites, most-recently-added first.
+pub async fn list_favorites(creds: &XtreamCredentials) -> Result<Vec<Stream>, AppError> {
+    call("list_favorites", &CategoriesArgs { creds }).await
+}
+
+/// Mark a stream as a favorite of an account.
+pub async fn add_favorite(creds: &XtreamCredentials, stream: &Stream) -> Result<(), AppError> {
+    call_unit("add_favorite", &FavoriteArgs { creds, stream }).await
+}
+
+/// Remove a favorite by its stable stream id.
+pub async fn remove_favorite(creds: &XtreamCredentials, stream_id: &str) -> Result<(), AppError> {
+    call_unit("remove_favorite", &RemoveFavoriteArgs { creds, stream_id }).await
+}
+
+/// An account's watch history, most-recently-watched first.
+pub async fn list_history(creds: &XtreamCredentials) -> Result<Vec<Stream>, AppError> {
+    call("list_history", &CategoriesArgs { creds }).await
+}
+
+/// Record that a stream was watched (the caller gates this on settings/incognito).
+pub async fn record_watch(creds: &XtreamCredentials, stream: &Stream) -> Result<(), AppError> {
+    call_unit("record_watch", &FavoriteArgs { creds, stream }).await
+}
+
+/// Erase all watch history.
+pub async fn clear_history() -> Result<(), AppError> {
+    call_unit("clear_history", &NoArgs {}).await
 }

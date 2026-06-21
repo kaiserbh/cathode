@@ -4,13 +4,19 @@
 pub mod category_list;
 pub mod connect_form;
 pub mod player_overlay;
+pub mod settings_panel;
 pub mod sources_panel;
 pub mod spinner;
 pub mod stream_grid;
+pub mod tab_bar;
+pub mod toggle;
 
 pub use category_list::CategoryList;
 pub use connect_form::ConnectForm;
 pub use player_overlay::PlayerOverlay;
+pub use settings_panel::SettingsPanel;
 pub use sources_panel::SourcesPanel;
 pub use spinner::Spinner;
 pub use stream_grid::StreamGrid;
+pub use tab_bar::{Tab, TabBar};
+pub use toggle::Toggle;
