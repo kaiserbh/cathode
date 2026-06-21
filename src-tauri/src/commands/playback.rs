@@ -19,6 +19,7 @@ pub fn play_stream(
     stream_id: String,
 ) -> Result<(), AppError> {
     let _span = info_span!("play_stream", stream_id = %stream_id).entered();
+    tracing::info!(%stream_id, "playing stream");
     let url = XtreamSource::from_credentials(&creds).live_stream_url(&stream_id, "ts");
     player.load(&url)
 }

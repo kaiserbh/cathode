@@ -58,9 +58,16 @@ pub async fn list_categories(
 ) -> Result<Vec<Category>, AppError> {
     let span = info_span!("list_categories", base_url = %creds.base_url);
     let categories = async {
-        list_categories_impl(&state.transport, &creds)
-            .await
-            .map_err(AppError::from)
+        match list_categories_impl(&state.transport, &creds).await {
+            Ok(v) => {
+                tracing::info!(count = v.len(), "fetched live categories");
+                Ok(v)
+            }
+            Err(e) => {
+                tracing::warn!("fetch live categories failed: {e}");
+                Err(AppError::from(e))
+            }
+        }
     }
     .instrument(span)
     .await?;
@@ -94,9 +101,16 @@ pub async fn list_streams(
 ) -> Result<Vec<Stream>, AppError> {
     let span = info_span!("list_streams", base_url = %creds.base_url, category = ?category_id);
     let streams = async {
-        list_streams_impl(&state.transport, &creds, category_id.as_deref())
-            .await
-            .map_err(AppError::from)
+        match list_streams_impl(&state.transport, &creds, category_id.as_deref()).await {
+            Ok(v) => {
+                tracing::info!(count = v.len(), "fetched live streams");
+                Ok(v)
+            }
+            Err(e) => {
+                tracing::warn!("fetch live streams failed: {e}");
+                Err(AppError::from(e))
+            }
+        }
     }
     .instrument(span)
     .await?;
