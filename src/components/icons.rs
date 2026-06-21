@@ -109,6 +109,11 @@ pub fn Trash(class: String) -> Element {
 }
 
 #[component]
+pub fn Check(class: String) -> Element {
+    icon(class, "M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z")
+}
+
+#[component]
 pub fn Search(class: String) -> Element {
     icon(
         class,
