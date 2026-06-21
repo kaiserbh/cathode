@@ -28,6 +28,25 @@ pub fn TitleBar(
             "data-tauri-drag-region": "true",
             class: "shrink-0 flex h-8 items-center gap-2 border-b border-neutral-200 \
                 px-2 dark:border-neutral-800 dark:bg-neutral-950 bg-white",
+            onmousedown: move |_| {
+                // Belt-and-suspenders drag: call startDragging() directly so dragging
+                // works even if Tauri's attribute-based listener missed the element
+                // (injected script runs before Dioxus/WASM boots the DOM).
+                // Skip interactive elements so clicks on the search input and buttons
+                // don't accidentally start a window drag.
+                let _ = document::eval(
+                    r#"(function(){
+                        var t = event.target;
+                        var skip = ['INPUT','BUTTON','SELECT','TEXTAREA','A'];
+                        if (!skip.includes(t.tagName)) {
+                            window.__TAURI__.window.getCurrent().startDragging();
+                        }
+                    })()"#,
+                );
+            },
+            // Left spacer: covers the native macOS traffic-light buttons (~72 px) plus
+            // an extra margin so there is visible drag area to their right.
+            div { class: "w-28 shrink-0" }
             // Centered search; the surrounding empty space stays draggable.
             div { class: "flex flex-1 justify-center",
                 div {
