@@ -5,6 +5,7 @@ use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
 
 use crate::components::ConnectForm;
+use crate::components::icons::Close;
 
 /// A human label for a saved account: `username @ host` (scheme stripped).
 fn label(creds: &XtreamCredentials) -> String {
@@ -42,10 +43,11 @@ pub fn SourcesPanel(
                         px-5 py-4 dark:border-neutral-800",
                     h2 { class: "text-base font-semibold", "Sources" }
                     button {
-                        class: "rounded-md px-2 py-1 text-sm text-neutral-500 \
-                            hover:bg-neutral-100 dark:hover:bg-neutral-800",
+                        class: "rounded-full p-1.5 text-neutral-500 hover:bg-neutral-100 \
+                            dark:hover:bg-neutral-800",
+                        title: "Close",
                         onclick: move |_| on_close.call(()),
-                        "Close"
+                        Close { class: "h-5 w-5" }
                     }
                 }
 

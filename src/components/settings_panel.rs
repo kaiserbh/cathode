@@ -6,6 +6,7 @@ use cathode_core::model::{ChannelView, Settings};
 use dioxus::prelude::*;
 
 use crate::components::Toggle;
+use crate::components::icons::Close;
 
 #[component]
 pub fn SettingsPanel(
@@ -33,10 +34,11 @@ pub fn SettingsPanel(
                         px-5 py-4 dark:border-neutral-800",
                     h2 { class: "text-base font-semibold", "Options" }
                     button {
-                        class: "rounded-md px-2 py-1 text-sm text-neutral-500 \
-                            hover:bg-neutral-100 dark:hover:bg-neutral-800",
+                        class: "rounded-full p-1.5 text-neutral-500 hover:bg-neutral-100 \
+                            dark:hover:bg-neutral-800",
+                        title: "Close",
                         onclick: move |_| on_close.call(()),
-                        "Close"
+                        Close { class: "h-5 w-5" }
                     }
                 }
 
