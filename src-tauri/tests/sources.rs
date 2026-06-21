@@ -1,6 +1,7 @@
 //! Integration tests for the source commands, exercising the real reqwest
 //! transport against a `wiremock` server that stands in for an Xtream provider.
 
+use cathode_core::model::StreamKind;
 use cathode_core::sources::xtream::XtreamCredentials;
 use cathode_lib::commands::sources::{list_categories_impl, list_streams_impl};
 use cathode_lib::http::ReqwestTransport;
@@ -35,9 +36,13 @@ async fn list_categories_hits_player_api_and_parses() {
         .mount(&server)
         .await;
 
-    let categories = list_categories_impl(&ReqwestTransport::new(), &creds(server.uri()))
-        .await
-        .unwrap();
+    let categories = list_categories_impl(
+        &ReqwestTransport::new(),
+        &creds(server.uri()),
+        StreamKind::Live,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(categories.len(), 2);
     assert_eq!(categories[0].name, "News");
@@ -54,9 +59,14 @@ async fn list_streams_passes_category_filter_and_parses() {
         .mount(&server)
         .await;
 
-    let streams = list_streams_impl(&ReqwestTransport::new(), &creds(server.uri()), Some("1"))
-        .await
-        .unwrap();
+    let streams = list_streams_impl(
+        &ReqwestTransport::new(),
+        &creds(server.uri()),
+        StreamKind::Live,
+        Some("1"),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(streams.len(), 2);
     assert_eq!(streams[0].name, "BBC News");
@@ -73,6 +83,11 @@ async fn http_error_status_becomes_network_error() {
         .mount(&server)
         .await;
 
-    let result = list_categories_impl(&ReqwestTransport::new(), &creds(server.uri())).await;
+    let result = list_categories_impl(
+        &ReqwestTransport::new(),
+        &creds(server.uri()),
+        StreamKind::Live,
+    )
+    .await;
     assert!(result.is_err());
 }

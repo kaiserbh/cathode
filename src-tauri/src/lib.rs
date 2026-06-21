@@ -108,6 +108,8 @@ pub fn run() {
             commands::sources::list_streams,
             commands::sources::cached_categories,
             commands::sources::cached_streams,
+            commands::sources::search_streams,
+            commands::sources::get_series_info,
             commands::sources::saved_sources,
             commands::sources::forget_source,
             commands::library::get_settings,
