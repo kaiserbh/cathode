@@ -2,6 +2,8 @@
 //! `cathode_core` types and raise events; state lives in the views.
 
 pub mod category_list;
+pub mod channel_list;
+pub mod channel_pane;
 pub mod connect_form;
 pub mod player_overlay;
 pub mod settings_panel;
@@ -12,6 +14,8 @@ pub mod tab_bar;
 pub mod toggle;
 
 pub use category_list::CategoryList;
+pub use channel_list::ChannelList;
+pub use channel_pane::ChannelPane;
 pub use connect_form::ConnectForm;
 pub use player_overlay::PlayerOverlay;
 pub use settings_panel::SettingsPanel;
