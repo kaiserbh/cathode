@@ -28,7 +28,7 @@ pub fn StreamGrid(
                 let played = stream.clone();
                 let favorited = stream.clone();
                 let is_favorite = favorite_ids.contains(&stream.id);
-                let now_next = stream.epg_channel_id.as_ref().and_then(|id| epg.get(id));
+                let now_next = crate::epg::resolve(&epg, stream);
                 rsx! {
                     div {
                         key: "{stream.id.0}",
