@@ -11,7 +11,8 @@ use std::collections::HashMap;
 
 use cathode_core::error::AppError;
 use cathode_core::model::{
-    Category, CategoryId, ChannelView, LogLevel, NowNext, Programme, Settings, Stream, StreamId,
+    Category, CategoryId, ChannelView, LogLevel, LogLine, NowNext, Programme, Settings, Stream,
+    StreamId,
 };
 use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
@@ -48,7 +49,7 @@ pub fn Browse() -> Element {
     let mut history = use_signal(Vec::<Stream>::new);
     let mut show_settings = use_signal(|| false);
     let mut show_logs = use_signal(|| false);
-    let mut logs = use_signal(Vec::<String>::new);
+    let mut logs = use_signal(Vec::<LogLine>::new);
     let mut tab = use_signal(|| Tab::Channels);
     let mut epg = use_signal(HashMap::<String, NowNext>::new);
     let mut programmes = use_signal(HashMap::<String, Vec<Programme>>::new);
@@ -594,7 +595,13 @@ pub fn Browse() -> Element {
                     });
                 },
                 on_copy: move |_| {
-                    let text = logs().join("\n");
+                    let text = logs()
+                        .iter()
+                        .map(|l| {
+                            format!("{} {} {}: {}", l.time, l.level.to_uppercase(), l.target, l.message)
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
                     spawn(crate::clipboard::copy(text));
                 },
                 on_clear: move |_| {

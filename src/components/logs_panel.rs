@@ -1,13 +1,17 @@
-//! The Logs panel: a modal that shows the captured debug log, with a level dropdown
-//! (Off disables capture), plus Copy and Clear actions for attaching logs to a bug
-//! report. Presentational — `Browse` owns the polling and the handlers.
+//! The Logs panel: a modal showing the captured debug log as colored, aligned rows,
+//! with a level dropdown (Off disables capture) and icon actions to copy or clear. It
+//! auto-scrolls to the newest line while open. Presentational — `Browse` owns the
+//! polling and the handlers.
 
-use cathode_core::model::LogLevel;
+use cathode_core::model::{LogLevel, LogLine};
 use dioxus::prelude::*;
 
-use crate::components::icons::Close;
+use crate::components::icons::{Close, Copy, Trash};
 
-/// The dropdown options, in order: `(stored value, label)`.
+/// The id of the scroll container, used to keep it pinned to the newest line.
+const SCROLL_ID: &str = "cathode-log-scroll";
+
+/// The dropdown options, in order.
 const LEVELS: &[(LogLevel, &str)] = &[
     (LogLevel::Off, "Off"),
     (LogLevel::Error, "Error"),
@@ -17,7 +21,6 @@ const LEVELS: &[(LogLevel, &str)] = &[
     (LogLevel::Trace, "Trace"),
 ];
 
-/// The lowercase wire spelling of a level (matches its serde representation).
 fn level_value(level: LogLevel) -> &'static str {
     LEVELS
         .iter()
@@ -34,9 +37,20 @@ fn level_from_value(value: &str) -> LogLevel {
         .unwrap_or(LogLevel::Off)
 }
 
+/// Color for a level's badge, matching its severity.
+fn level_color(level: &str) -> &'static str {
+    match level {
+        "error" => "text-red-400",
+        "warn" => "text-amber-400",
+        "info" => "text-sky-400",
+        "debug" => "text-emerald-400",
+        _ => "text-neutral-500",
+    }
+}
+
 #[component]
 pub fn LogsPanel(
-    logs: Vec<String>,
+    logs: Vec<LogLine>,
     level: LogLevel,
     on_set_level: EventHandler<LogLevel>,
     on_copy: EventHandler<()>,
@@ -44,6 +58,17 @@ pub fn LogsPanel(
     on_close: EventHandler<()>,
 ) -> Element {
     let current = level_value(level);
+
+    // Keep the view pinned to the newest line whenever the set of lines changes.
+    let count = logs.len();
+    use_effect(use_reactive!(|count| {
+        if count > 0 {
+            let _ = document::eval(&format!(
+                "var e=document.getElementById('{SCROLL_ID}'); if(e){{e.scrollTop=e.scrollHeight;}}"
+            ));
+        }
+    }));
+
     rsx! {
         div {
             class: "fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 \
@@ -75,20 +100,21 @@ pub fn LogsPanel(
                         class: "ml-auto flex items-center gap-1",
                         button {
                             class: BTN,
+                            title: "Copy",
                             onclick: move |_| on_copy.call(()),
-                            "Copy"
+                            Copy { class: ICON }
                         }
                         button {
                             class: BTN,
+                            title: "Clear",
                             onclick: move |_| on_clear.call(()),
-                            "Clear"
+                            Trash { class: ICON }
                         }
                         button {
-                            class: "rounded-full p-1.5 text-neutral-500 hover:bg-neutral-100 \
-                                dark:hover:bg-neutral-800",
+                            class: BTN,
                             title: "Close",
                             onclick: move |_| on_close.call(()),
-                            Close { class: "h-5 w-5" }
+                            Close { class: ICON }
                         }
                     }
                 }
@@ -103,11 +129,24 @@ pub fn LogsPanel(
                         }
                     }
                 } else {
-                    pre {
-                        class: "m-4 flex-1 overflow-auto rounded-md bg-neutral-950 p-3 text-xs \
-                            leading-relaxed text-neutral-200 whitespace-pre-wrap break-all",
+                    div {
+                        id: SCROLL_ID,
+                        class: "m-4 flex-1 overflow-auto rounded-md bg-neutral-950 p-3 font-mono \
+                            text-xs leading-relaxed",
                         for line in logs.iter() {
-                            "{line}\n"
+                            div {
+                                class: "flex gap-3",
+                                span { class: "shrink-0 text-neutral-500", "{line.time}" }
+                                span {
+                                    class: "w-12 shrink-0 font-semibold uppercase {level_color(&line.level)}",
+                                    "{line.level}"
+                                }
+                                span {
+                                    class: "min-w-0 flex-1 break-words text-neutral-200",
+                                    span { class: "text-neutral-500", "{line.target}: " }
+                                    "{line.message}"
+                                }
+                            }
                         }
                     }
                 }
@@ -116,6 +155,7 @@ pub fn LogsPanel(
     }
 }
 
-const BTN: &str = "rounded-md px-3 py-1.5 text-sm font-medium text-neutral-700 \
-    hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-sky-400 \
-    dark:text-neutral-300 dark:hover:bg-neutral-800";
+const BTN: &str = "rounded-full p-2 text-neutral-500 hover:bg-neutral-100 \
+    focus:outline-none focus:ring-2 focus:ring-sky-400 dark:text-neutral-300 \
+    dark:hover:bg-neutral-800";
+const ICON: &str = "h-5 w-5";
