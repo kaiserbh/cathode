@@ -60,7 +60,7 @@ fn next_stamp(conn: &Connection, max_sql: &str) -> Result<i64, CoreError> {
 }
 
 /// Read a stream snapshot from a favorite/history row selected as
-/// `(stream_id, provider_id, name, logo, kind, category_id, epg_channel_id)`.
+/// `(stream_id, provider_id, name, logo, kind, category_id, epg_channel_id, ext)`.
 fn row_to_stream(row: &Row) -> rusqlite::Result<Stream> {
     let kind: String = row.get(4)?;
     let category_id: Option<String> = row.get(5)?;
@@ -72,6 +72,7 @@ fn row_to_stream(row: &Row) -> rusqlite::Result<Stream> {
         category_id: category_id.map(CategoryId),
         kind: kind_from_str(&kind),
         epg_channel_id: row.get(6)?,
+        container_extension: row.get(7)?,
     })
 }
 
@@ -188,6 +189,43 @@ fn migrate(conn: &Connection) -> Result<(), CoreError> {
              COMMIT;",
         )
         .map_err(|e| store("create schema v3", e))?;
+        version = 3;
+    }
+
+    if version < 4 {
+        // VOD/Series: the cached category/stream tables must be keyed by content
+        // kind (Live/VOD/Series can share a category id) and remember the playable
+        // file extension. These caches are disposable, so rebuild them; the
+        // favorite/history snapshots are preserved and just gain a nullable `ext`.
+        conn.execute_batch(
+            "BEGIN;
+             DROP TABLE IF EXISTS category;
+             DROP TABLE IF EXISTS stream;
+             CREATE TABLE category (
+                 source_id TEXT NOT NULL,
+                 kind      TEXT NOT NULL,
+                 id        TEXT NOT NULL,
+                 name      TEXT NOT NULL,
+                 PRIMARY KEY (source_id, kind, id)
+             );
+             CREATE TABLE stream (
+                 source_id      TEXT NOT NULL,
+                 kind           TEXT NOT NULL,
+                 category_id    TEXT NOT NULL,
+                 stream_id      TEXT NOT NULL,
+                 provider_id    TEXT NOT NULL,
+                 name           TEXT NOT NULL,
+                 logo           TEXT,
+                 epg_channel_id TEXT,
+                 ext            TEXT,
+                 PRIMARY KEY (source_id, kind, category_id, stream_id)
+             );
+             ALTER TABLE favorite ADD COLUMN ext TEXT;
+             ALTER TABLE history ADD COLUMN ext TEXT;
+             PRAGMA user_version = 4;
+             COMMIT;",
+        )
+        .map_err(|e| store("create schema v4", e))?;
     }
 
     Ok(())
@@ -255,36 +293,40 @@ impl Catalog for SqliteCatalog {
     fn replace_categories(
         &self,
         source_id: &str,
+        kind: StreamKind,
         categories: &[Category],
     ) -> Result<(), CoreError> {
+        let kind = kind_to_str(kind);
         let mut conn = self.conn.lock().unwrap();
         let tx = conn
             .transaction()
             .map_err(|e| store("begin categories", e))?;
         tx.execute(
-            "DELETE FROM category WHERE source_id = ?1",
-            params![source_id],
+            "DELETE FROM category WHERE source_id = ?1 AND kind = ?2",
+            params![source_id, kind],
         )
         .map_err(|e| store("clear categories", e))?;
         {
             let mut stmt = tx
-                .prepare("INSERT INTO category (source_id, id, name) VALUES (?1, ?2, ?3)")
+                .prepare("INSERT INTO category (source_id, kind, id, name) VALUES (?1, ?2, ?3, ?4)")
                 .map_err(|e| store("prepare category insert", e))?;
             for category in categories {
-                stmt.execute(params![source_id, category.id.0, category.name])
+                stmt.execute(params![source_id, kind, category.id.0, category.name])
                     .map_err(|e| store("insert category", e))?;
             }
         }
         tx.commit().map_err(|e| store("commit categories", e))
     }
 
-    fn categories(&self, source_id: &str) -> Result<Vec<Category>, CoreError> {
+    fn categories(&self, source_id: &str, kind: StreamKind) -> Result<Vec<Category>, CoreError> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
-            .prepare("SELECT id, name FROM category WHERE source_id = ?1 ORDER BY rowid")
+            .prepare(
+                "SELECT id, name FROM category WHERE source_id = ?1 AND kind = ?2 ORDER BY rowid",
+            )
             .map_err(|e| store("prepare categories", e))?;
         let rows = stmt
-            .query_map(params![source_id], |row| {
+            .query_map(params![source_id, kind_to_str(kind)], |row| {
                 Ok(Category {
                     id: CategoryId(row.get(0)?),
                     name: row.get(1)?,
@@ -298,35 +340,38 @@ impl Catalog for SqliteCatalog {
     fn replace_streams(
         &self,
         source_id: &str,
+        kind: StreamKind,
         category_id: &str,
         streams: &[Stream],
     ) -> Result<(), CoreError> {
+        let kind = kind_to_str(kind);
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction().map_err(|e| store("begin streams", e))?;
         tx.execute(
-            "DELETE FROM stream WHERE source_id = ?1 AND category_id = ?2",
-            params![source_id, category_id],
+            "DELETE FROM stream WHERE source_id = ?1 AND kind = ?2 AND category_id = ?3",
+            params![source_id, kind, category_id],
         )
         .map_err(|e| store("clear streams", e))?;
         {
             let mut stmt = tx
                 .prepare(
                     "INSERT INTO stream
-                       (source_id, category_id, stream_id, provider_id, name, logo, kind,
-                        epg_channel_id)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                       (source_id, kind, category_id, stream_id, provider_id, name, logo,
+                        epg_channel_id, ext)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 )
                 .map_err(|e| store("prepare stream insert", e))?;
             for stream in streams {
                 stmt.execute(params![
                     source_id,
+                    kind,
                     category_id,
                     stream.id.0,
                     stream.provider_id,
                     stream.name,
                     stream.logo,
-                    kind_to_str(stream.kind),
                     stream.epg_channel_id,
+                    stream.container_extension,
                 ])
                 .map_err(|e| store("insert stream", e))?;
             }
@@ -334,16 +379,21 @@ impl Catalog for SqliteCatalog {
         tx.commit().map_err(|e| store("commit streams", e))
     }
 
-    fn streams(&self, source_id: &str, category_id: &str) -> Result<Vec<Stream>, CoreError> {
+    fn streams(
+        &self,
+        source_id: &str,
+        kind: StreamKind,
+        category_id: &str,
+    ) -> Result<Vec<Stream>, CoreError> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT stream_id, provider_id, name, logo, kind, epg_channel_id FROM stream
-                 WHERE source_id = ?1 AND category_id = ?2 ORDER BY rowid",
+                "SELECT stream_id, provider_id, name, logo, kind, epg_channel_id, ext FROM stream
+                 WHERE source_id = ?1 AND kind = ?2 AND category_id = ?3 ORDER BY rowid",
             )
             .map_err(|e| store("prepare streams", e))?;
         let rows = stmt
-            .query_map(params![source_id, category_id], |row| {
+            .query_map(params![source_id, kind_to_str(kind), category_id], |row| {
                 let kind: String = row.get(4)?;
                 Ok(Stream {
                     id: StreamId(row.get(0)?),
@@ -353,11 +403,35 @@ impl Catalog for SqliteCatalog {
                     category_id: Some(CategoryId(category_id.to_string())),
                     kind: kind_from_str(&kind),
                     epg_channel_id: row.get(5)?,
+                    container_extension: row.get(6)?,
                 })
             })
             .map_err(|e| store("query streams", e))?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| store("read streams", e))
+    }
+
+    fn search_streams(&self, source_id: &str, query: &str) -> Result<Vec<Stream>, CoreError> {
+        // Escape the LIKE wildcards so a query of "100%" matches literally.
+        let escaped = query
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = format!("%{escaped}%");
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT stream_id, provider_id, name, logo, kind, category_id, epg_channel_id, ext
+                 FROM stream
+                 WHERE source_id = ?1 AND name LIKE ?2 ESCAPE '\\'
+                 ORDER BY name LIMIT 200",
+            )
+            .map_err(|e| store("prepare search", e))?;
+        let rows = stmt
+            .query_map(params![source_id, pattern], row_to_stream)
+            .map_err(|e| store("query search", e))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| store("read search", e))
     }
 
     fn get_setting(&self, key: &str) -> Result<Option<String>, CoreError> {
@@ -389,8 +463,8 @@ impl Catalog for SqliteCatalog {
         conn.execute(
             "INSERT INTO favorite
                (source_id, stream_id, provider_id, name, logo, kind, category_id, added_at,
-                epg_channel_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                epg_channel_id, ext)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(source_id, stream_id) DO NOTHING",
             params![
                 source_id,
@@ -402,6 +476,7 @@ impl Catalog for SqliteCatalog {
                 category_id,
                 added_at,
                 stream.epg_channel_id,
+                stream.container_extension,
             ],
         )
         .map_err(|e| store("add favorite", e))?;
@@ -422,7 +497,7 @@ impl Catalog for SqliteCatalog {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT stream_id, provider_id, name, logo, kind, category_id, epg_channel_id
+                "SELECT stream_id, provider_id, name, logo, kind, category_id, epg_channel_id, ext
                  FROM favorite WHERE source_id = ?1 ORDER BY added_at DESC",
             )
             .map_err(|e| store("prepare favorites", e))?;
@@ -440,8 +515,8 @@ impl Catalog for SqliteCatalog {
         conn.execute(
             "INSERT INTO history
                (source_id, stream_id, provider_id, name, logo, kind, category_id, watched_at,
-                epg_channel_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                epg_channel_id, ext)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(source_id, stream_id) DO UPDATE SET
                  provider_id = excluded.provider_id,
                  name = excluded.name,
@@ -449,7 +524,8 @@ impl Catalog for SqliteCatalog {
                  kind = excluded.kind,
                  category_id = excluded.category_id,
                  watched_at = excluded.watched_at,
-                 epg_channel_id = excluded.epg_channel_id",
+                 epg_channel_id = excluded.epg_channel_id,
+                 ext = excluded.ext",
             params![
                 source_id,
                 stream.id.0,
@@ -460,6 +536,7 @@ impl Catalog for SqliteCatalog {
                 category_id,
                 watched_at,
                 stream.epg_channel_id,
+                stream.container_extension,
             ],
         )
         .map_err(|e| store("record watch", e))?;
@@ -470,7 +547,7 @@ impl Catalog for SqliteCatalog {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT stream_id, provider_id, name, logo, kind, category_id, epg_channel_id
+                "SELECT stream_id, provider_id, name, logo, kind, category_id, epg_channel_id, ext
                  FROM history WHERE source_id = ?1 ORDER BY watched_at DESC",
             )
             .map_err(|e| store("prepare history", e))?;
@@ -527,14 +604,23 @@ mod tests {
             id: CategoryId("2".to_string()),
             name: "News".to_string(),
         };
-        cat.replace_categories("src-a", &[sports.clone(), news.clone()])
+        cat.replace_categories("src-a", StreamKind::Live, &[sports.clone(), news.clone()])
             .unwrap();
-        assert_eq!(cat.categories("src-a").unwrap(), vec![sports, news.clone()]);
+        assert_eq!(
+            cat.categories("src-a", StreamKind::Live).unwrap(),
+            vec![sports, news.clone()]
+        );
 
-        cat.replace_categories("src-a", std::slice::from_ref(&news))
+        cat.replace_categories("src-a", StreamKind::Live, std::slice::from_ref(&news))
             .unwrap();
-        assert_eq!(cat.categories("src-a").unwrap(), vec![news]);
-        assert!(cat.categories("src-b").unwrap().is_empty());
+        assert_eq!(
+            cat.categories("src-a", StreamKind::Live).unwrap(),
+            vec![news]
+        );
+        assert!(cat
+            .categories("src-b", StreamKind::Live)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
@@ -543,10 +629,15 @@ mod tests {
         let mut s1 = Stream::new("src-a", "1", "One", StreamKind::Live);
         s1.logo = Some("http://logo/1.png".to_string());
         let s2 = Stream::new("src-a", "2", "Two", StreamKind::Live);
-        cat.replace_streams("src-a", "sports", &[s1.clone(), s2.clone()])
-            .unwrap();
+        cat.replace_streams(
+            "src-a",
+            StreamKind::Live,
+            "sports",
+            &[s1.clone(), s2.clone()],
+        )
+        .unwrap();
 
-        let read = cat.streams("src-a", "sports").unwrap();
+        let read = cat.streams("src-a", StreamKind::Live, "sports").unwrap();
         // Stable id, provider id, logo, and kind all survive the round trip.
         assert_eq!(read.len(), 2);
         assert_eq!(read[0].id, s1.id);
@@ -554,8 +645,60 @@ mod tests {
         assert_eq!(read[0].logo, s1.logo);
         assert_eq!(read[0].kind, StreamKind::Live);
         // Other buckets are independent.
-        assert!(cat.streams("src-a", "news").unwrap().is_empty());
-        assert!(cat.streams("src-b", "sports").unwrap().is_empty());
+        assert!(cat
+            .streams("src-a", StreamKind::Live, "news")
+            .unwrap()
+            .is_empty());
+        assert!(cat
+            .streams("src-b", StreamKind::Live, "sports")
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn cache_is_isolated_by_kind_and_round_trips_ext() {
+        let cat = SqliteCatalog::open_in_memory().unwrap();
+        let live = Stream::new("a", "1", "Live One", StreamKind::Live);
+        let mut movie = Stream::new("a", "1", "Movie One", StreamKind::Vod);
+        movie.container_extension = Some("mkv".to_string());
+        // Same category id "5" under two kinds must not collide.
+        cat.replace_streams("a", StreamKind::Live, "5", std::slice::from_ref(&live))
+            .unwrap();
+        cat.replace_streams("a", StreamKind::Vod, "5", std::slice::from_ref(&movie))
+            .unwrap();
+
+        let live_read = cat.streams("a", StreamKind::Live, "5").unwrap();
+        let vod_read = cat.streams("a", StreamKind::Vod, "5").unwrap();
+        assert_eq!(live_read.len(), 1);
+        assert_eq!(live_read[0].name, "Live One");
+        assert_eq!(vod_read[0].name, "Movie One");
+        assert_eq!(vod_read[0].container_extension.as_deref(), Some("mkv"));
+    }
+
+    #[test]
+    fn search_matches_names_across_categories_and_kinds() {
+        let cat = SqliteCatalog::open_in_memory().unwrap();
+        let sky = Stream::new("a", "1", "Sky Sports", StreamKind::Live);
+        let skyfall = Stream::new("a", "2", "Skyfall", StreamKind::Vod);
+        let bbc = Stream::new("a", "3", "BBC One", StreamKind::Live);
+        cat.replace_streams("a", StreamKind::Live, "sports", &[sky, bbc])
+            .unwrap();
+        cat.replace_streams(
+            "a",
+            StreamKind::Vod,
+            "films",
+            std::slice::from_ref(&skyfall),
+        )
+        .unwrap();
+
+        let names: Vec<_> = cat
+            .search_streams("a", "sky")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+        assert_eq!(names, vec!["Sky Sports".to_string(), "Skyfall".to_string()]);
+        assert!(cat.search_streams("b", "sky").unwrap().is_empty());
     }
 
     #[test]
@@ -564,14 +707,20 @@ mod tests {
         cat.upsert_source(&record("a")).unwrap();
         cat.replace_categories(
             "a",
+            StreamKind::Live,
             &[Category {
                 id: CategoryId("1".to_string()),
                 name: "Sports".to_string(),
             }],
         )
         .unwrap();
-        cat.replace_streams("a", "1", &[Stream::new("a", "9", "Nine", StreamKind::Live)])
-            .unwrap();
+        cat.replace_streams(
+            "a",
+            StreamKind::Live,
+            "1",
+            &[Stream::new("a", "9", "Nine", StreamKind::Live)],
+        )
+        .unwrap();
         cat.add_favorite("a", &Stream::new("a", "9", "Nine", StreamKind::Live))
             .unwrap();
         cat.record_watch("a", &Stream::new("a", "9", "Nine", StreamKind::Live))
@@ -580,8 +729,8 @@ mod tests {
         cat.delete_source("a").unwrap();
 
         assert!(cat.sources().unwrap().is_empty());
-        assert!(cat.categories("a").unwrap().is_empty());
-        assert!(cat.streams("a", "1").unwrap().is_empty());
+        assert!(cat.categories("a", StreamKind::Live).unwrap().is_empty());
+        assert!(cat.streams("a", StreamKind::Live, "1").unwrap().is_empty());
         assert!(cat.favorites("a").unwrap().is_empty());
         assert!(cat.history("a").unwrap().is_empty());
     }
@@ -645,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn v1_database_upgrades_to_v2_without_data_loss() {
+    fn v1_database_upgrades_to_latest_without_data_loss() {
         // Build a v1 database by hand (the pre-library schema) with one source row.
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
@@ -687,13 +836,18 @@ mod tests {
         let mut stream = Stream::new("a", "1", "One", StreamKind::Live);
         stream.epg_channel_id = Some("bbc1.uk".to_string());
 
-        cat.replace_streams("a", "sports", std::slice::from_ref(&stream))
-            .unwrap();
+        cat.replace_streams(
+            "a",
+            StreamKind::Live,
+            "sports",
+            std::slice::from_ref(&stream),
+        )
+        .unwrap();
         cat.add_favorite("a", &stream).unwrap();
         cat.record_watch("a", &stream).unwrap();
 
         assert_eq!(
-            cat.streams("a", "sports").unwrap()[0]
+            cat.streams("a", StreamKind::Live, "sports").unwrap()[0]
                 .epg_channel_id
                 .as_deref(),
             Some("bbc1.uk")
