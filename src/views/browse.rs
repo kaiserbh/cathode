@@ -17,7 +17,7 @@ use gloo_timers::future::TimeoutFuture;
 
 use crate::bindings;
 use crate::components::{
-    CategoryList, PlayerOverlay, SettingsPanel, SourcesPanel, Spinner, StreamGrid, Tab, TabBar,
+    CategoryList, ChannelPane, PlayerOverlay, SettingsPanel, SourcesPanel, Spinner, Tab, TabBar,
 };
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
@@ -296,6 +296,7 @@ pub fn Browse() -> Element {
     let current_settings = settings();
     let favorites_enabled = current_settings.favorites_enabled;
     let history_enabled = current_settings.history_enabled;
+    let channel_view = current_settings.channel_view;
     let favorite_ids: Vec<StreamId> = favorites().iter().map(|s| s.id.clone()).collect();
 
     // A disabled feature's tab falls back to Channels.
@@ -361,7 +362,8 @@ pub fn Browse() -> Element {
                                 if loading() && streams().is_empty() {
                                     Spinner {}
                                 } else {
-                                    StreamGrid {
+                                    ChannelPane {
+                                        view: channel_view,
                                         streams: streams(),
                                         favorites_enabled,
                                         favorite_ids: favorite_ids.clone(),
@@ -382,7 +384,8 @@ pub fn Browse() -> Element {
                                     "No favorites yet. Tap the star on a channel to add one."
                                 }
                             } else {
-                                StreamGrid {
+                                ChannelPane {
+                                    view: channel_view,
                                     streams: favorites(),
                                     favorites_enabled,
                                     favorite_ids: favorite_ids.clone(),
@@ -402,7 +405,8 @@ pub fn Browse() -> Element {
                                     "Nothing watched yet."
                                 }
                             } else {
-                                StreamGrid {
+                                ChannelPane {
+                                    view: channel_view,
                                     streams: history(),
                                     favorites_enabled,
                                     favorite_ids: favorite_ids.clone(),
