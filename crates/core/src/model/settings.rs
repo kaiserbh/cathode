@@ -16,6 +16,8 @@ pub enum ChannelView {
     Grid,
     /// A compact one-per-row list with more room for guide text.
     List,
+    /// A channels × time timeline (the EPG guide).
+    Guide,
 }
 
 /// Persisted feature toggles. Defaults are on / Grid; the user opts out, not in.

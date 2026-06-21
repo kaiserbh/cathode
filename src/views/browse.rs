@@ -10,7 +10,9 @@
 use std::collections::HashMap;
 
 use cathode_core::error::AppError;
-use cathode_core::model::{Category, CategoryId, ChannelView, NowNext, Settings, Stream, StreamId};
+use cathode_core::model::{
+    Category, CategoryId, ChannelView, NowNext, Programme, Settings, Stream, StreamId,
+};
 use cathode_core::sources::xtream::XtreamCredentials;
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
@@ -46,6 +48,9 @@ pub fn Browse() -> Element {
     let mut show_settings = use_signal(|| false);
     let mut tab = use_signal(|| Tab::Channels);
     let mut epg = use_signal(HashMap::<String, NowNext>::new);
+    let mut programmes = use_signal(HashMap::<String, Vec<Programme>>::new);
+    let mut guide_from = use_signal(|| 0i64);
+    let mut guide_to = use_signal(|| 0i64);
 
     // Make a source active: paint its cached channels instantly, refresh from the
     // network, and load its favorites + history.
@@ -122,8 +127,34 @@ pub fn Browse() -> Element {
         }
     });
 
-    // Keep now/next current as time passes. The guide is cached server-side after the
-    // first fetch, so this just recomputes against the clock — no re-download.
+    // Fetch the windowed guide programmes (for the timeline) for a 6h window from the
+    // current half-hour. Stamps the window it fetched so the timeline positions match.
+    let load_programmes = use_callback(move |current: XtreamCredentials| {
+        let now = crate::format::now_unix();
+        let from = now - now.rem_euclid(1800);
+        let to = from + 6 * 3600;
+        guide_from.set(from);
+        guide_to.set(to);
+        spawn(async move {
+            if let Ok(map) = bindings::epg_programmes(&current, from, to).await {
+                programmes.set(map);
+            }
+        });
+    });
+
+    // Load timeline programmes whenever the Guide view is active (and EPG is on).
+    use_effect(move || {
+        let s = settings();
+        if s.epg_enabled && s.channel_view == ChannelView::Guide {
+            if let Some(current) = creds.read().clone() {
+                load_programmes.call(current);
+            }
+        }
+    });
+
+    // Keep now/next (and the guide, in Guide view) current as time passes. The guide
+    // is cached server-side after the first fetch, so this just recomputes against
+    // the clock — no re-download.
     use_future(move || async move {
         loop {
             TimeoutFuture::new(60_000).await;
@@ -133,6 +164,9 @@ pub fn Browse() -> Element {
             if let Some(current) = creds.read().clone() {
                 if let Ok(map) = bindings::epg_now_next(&current).await {
                     epg.set(map);
+                }
+                if settings.read().channel_view == ChannelView::Guide {
+                    load_programmes.call(current);
                 }
             }
         }
@@ -376,6 +410,10 @@ pub fn Browse() -> Element {
                                         favorites_enabled,
                                         favorite_ids: favorite_ids.clone(),
                                         epg: epg(),
+                                        programmes: programmes(),
+                                        guide_from: guide_from(),
+                                        guide_to: guide_to(),
+                                        now: crate::format::now_unix(),
                                         on_play: move |s| on_play.call(s),
                                         on_toggle_favorite: move |s| toggle_favorite.call(s),
                                     }
@@ -398,6 +436,10 @@ pub fn Browse() -> Element {
                                     favorites_enabled,
                                     favorite_ids: favorite_ids.clone(),
                                     epg: epg(),
+                                    programmes: programmes(),
+                                    guide_from: guide_from(),
+                                    guide_to: guide_to(),
+                                    now: crate::format::now_unix(),
                                     on_play: move |s| on_play.call(s),
                                     on_toggle_favorite: move |s| toggle_favorite.call(s),
                                 }
@@ -419,6 +461,10 @@ pub fn Browse() -> Element {
                                     favorites_enabled,
                                     favorite_ids: favorite_ids.clone(),
                                     epg: epg(),
+                                    programmes: programmes(),
+                                    guide_from: guide_from(),
+                                    guide_to: guide_to(),
+                                    now: crate::format::now_unix(),
                                     on_play: move |s| on_play.call(s),
                                     on_toggle_favorite: move |s| toggle_favorite.call(s),
                                 }
