@@ -17,7 +17,9 @@
         "title": "cathode",
         "width": 1280,
         "height": 720,
-        "transparent": true
+        "transparent": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
