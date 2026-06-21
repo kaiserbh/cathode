@@ -28,23 +28,27 @@ fn main() {
             vendor.join("mpv.lib").display()
         );
 
-        // `mpv.lib` satisfies the linker; `libmpv-2.dll` must sit next to the built
-        // binaries to load at runtime. Windows only searches the executable's own
-        // directory, so place it both in the profile dir (the app binary) and `deps/`
-        // (test/example binaries, which link libmpv and won't even load without it).
-        let dll = vendor.join("libmpv-2.dll");
+        // `mpv.lib` satisfies the linker; the runtime DLLs must sit next to the built
+        // binaries to load. Windows only searches the executable's own directory, so
+        // place them both in the profile dir (the app binary) and `deps/` (test/example
+        // binaries, which link libmpv and won't even load without it). libEGL/libGLESv2
+        // are ANGLE, driving the Windows video surface's GL render context.
         let out_dir = std::env::var("OUT_DIR").unwrap();
         if let Some(profile) = std::path::Path::new(&out_dir).ancestors().nth(3) {
-            for dir in [profile.to_path_buf(), profile.join("deps")] {
-                let _ = std::fs::create_dir_all(&dir);
-                let dest = dir.join("libmpv-2.dll");
-                // Skip the 112 MB copy when an identical DLL is already present.
-                let stale = std::fs::metadata(&dest)
-                    .ok()
-                    .zip(std::fs::metadata(&dll).ok())
-                    .is_none_or(|(d, s)| d.len() != s.len());
-                if stale {
-                    let _ = std::fs::copy(&dll, &dest);
+            let targets = [profile.to_path_buf(), profile.join("deps")];
+            for name in ["libmpv-2.dll", "libEGL.dll", "libGLESv2.dll"] {
+                let src = vendor.join(name);
+                for dir in &targets {
+                    let _ = std::fs::create_dir_all(dir);
+                    let dest = dir.join(name);
+                    // Skip the copy (libmpv-2.dll is 112 MB) when identical already present.
+                    let stale = std::fs::metadata(&dest)
+                        .ok()
+                        .zip(std::fs::metadata(&src).ok())
+                        .is_none_or(|(d, s)| d.len() != s.len());
+                    if stale {
+                        let _ = std::fs::copy(&src, &dest);
+                    }
                 }
             }
         }
