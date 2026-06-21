@@ -181,15 +181,26 @@ pub fn Browse() -> Element {
         let cached_id = id.clone();
         spawn(async move {
             if let Ok(cached) = bindings::cached_streams(&cached_creds, &cached_id.0).await {
-                if !cached.is_empty() && streams.read().is_empty() {
+                // Drop the result if the user has since switched categories, and
+                // only paint the cache if the network hasn't already answered.
+                if selected.read().as_ref() == Some(&cached_id)
+                    && !cached.is_empty()
+                    && streams.read().is_empty()
+                {
                     streams.set(cached);
                 }
             }
         });
 
         loading.set(true);
+        let net_id = id.clone();
         spawn(async move {
-            match bindings::list_streams(&current, Some(&id.0)).await {
+            let result = bindings::list_streams(&current, Some(&id.0)).await;
+            // A response for a category the user already left is stale — drop it.
+            if selected.read().as_ref() != Some(&net_id) {
+                return;
+            }
+            match result {
                 Ok(list) => streams.set(list),
                 Err(e) => error.set(Some(e)),
             }
@@ -291,10 +302,10 @@ pub fn Browse() -> Element {
 
     rsx! {
         div {
-            class: "min-h-screen flex flex-col bg-white text-neutral-900 \
+            class: "h-screen overflow-hidden flex flex-col bg-white text-neutral-900 \
                 dark:bg-neutral-950 dark:text-neutral-100",
             header {
-                class: "flex items-center justify-between border-b border-neutral-200 \
+                class: "shrink-0 flex items-center justify-between border-b border-neutral-200 \
                     dark:border-neutral-800 p-4",
                 div {
                     class: "flex items-center gap-3",
@@ -317,8 +328,9 @@ pub fn Browse() -> Element {
 
             if let Some(err) = error() {
                 div {
-                    class: "m-4 rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm \
-                        text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200",
+                    class: "shrink-0 m-4 rounded-md border border-red-300 bg-red-50 px-4 py-2 \
+                        text-sm text-red-800 dark:border-red-800 dark:bg-red-950 \
+                        dark:text-red-200",
                     "[{err.code}] {err.message}"
                 }
             }
@@ -340,7 +352,7 @@ pub fn Browse() -> Element {
                                 on_select,
                             }
                             main {
-                                class: "flex-1 overflow-y-auto",
+                                class: "flex-1 min-h-0 overflow-y-auto",
                                 if loading() && streams().is_empty() {
                                     Spinner {}
                                 } else {
