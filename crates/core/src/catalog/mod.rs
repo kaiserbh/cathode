@@ -36,7 +36,8 @@ pub trait Catalog {
     /// All known sources, most-recently-used first.
     fn sources(&self) -> Result<Vec<SourceRecord>, CoreError>;
 
-    /// Remove a source and any categories/streams cached under it.
+    /// Remove a source and everything stored under it (cached categories/streams,
+    /// favorites, and history).
     fn delete_source(&self, id: &str) -> Result<(), CoreError>;
 
     /// Replace the cached categories for a source with the given set.
@@ -56,6 +57,32 @@ pub trait Catalog {
 
     /// The cached streams for a `(source, category)` (empty if none cached).
     fn streams(&self, source_id: &str, category_id: &str) -> Result<Vec<Stream>, CoreError>;
+
+    /// A persisted app setting value, or `None` if unset. Settings are a generic
+    /// key/value store; callers (de)serialize structured values themselves.
+    fn get_setting(&self, key: &str) -> Result<Option<String>, CoreError>;
+
+    /// Set (or overwrite) a persisted app setting value.
+    fn set_setting(&self, key: &str, value: &str) -> Result<(), CoreError>;
+
+    /// Mark a stream as a favorite of a source (no-op if already a favorite).
+    fn add_favorite(&self, source_id: &str, stream: &Stream) -> Result<(), CoreError>;
+
+    /// Remove a favorite by its stable stream id.
+    fn remove_favorite(&self, source_id: &str, stream_id: &str) -> Result<(), CoreError>;
+
+    /// A source's favorites, most-recently-added first.
+    fn favorites(&self, source_id: &str) -> Result<Vec<Stream>, CoreError>;
+
+    /// Record that a stream was watched now (de-duped per stream: re-watching moves
+    /// it to the front rather than adding a second entry).
+    fn record_watch(&self, source_id: &str, stream: &Stream) -> Result<(), CoreError>;
+
+    /// A source's watch history, most-recently-watched first.
+    fn history(&self, source_id: &str) -> Result<Vec<Stream>, CoreError>;
+
+    /// Erase all watch history (every source). A privacy action.
+    fn clear_history(&self) -> Result<(), CoreError>;
 }
 
 #[cfg(test)]
@@ -74,6 +101,32 @@ mod tests {
         sources: RefCell<HashMap<String, (SourceRecord, u64)>>,
         categories: RefCell<HashMap<String, Vec<Category>>>,
         streams: RefCell<HashMap<(String, String), Vec<Stream>>>,
+        settings: RefCell<HashMap<String, String>>,
+        // Per source: each stream tagged with the seq at which it was added/watched,
+        // so we can order most-recent-first deterministically.
+        favorites: RefCell<HashMap<String, Vec<(Stream, u64)>>>,
+        history: RefCell<HashMap<String, Vec<(Stream, u64)>>>,
+    }
+
+    impl FakeCatalog {
+        fn next_seq(&self) -> u64 {
+            let mut seq = self.seq.borrow_mut();
+            *seq += 1;
+            *seq
+        }
+    }
+
+    /// Upsert a stream into a per-source recency list (newest seq wins), de-duping
+    /// by stable id; returns the list sorted most-recent-first.
+    fn recency_upsert(list: &mut Vec<(Stream, u64)>, stream: &Stream, seq: u64) {
+        list.retain(|(s, _)| s.id != stream.id);
+        list.push((stream.clone(), seq));
+    }
+
+    fn recency_sorted(list: &[(Stream, u64)]) -> Vec<Stream> {
+        let mut rows = list.to_vec();
+        rows.sort_by_key(|(_, seq)| std::cmp::Reverse(*seq));
+        rows.into_iter().map(|(s, _)| s).collect()
     }
 
     impl Catalog for FakeCatalog {
@@ -96,6 +149,8 @@ mod tests {
             self.sources.borrow_mut().remove(id);
             self.categories.borrow_mut().remove(id);
             self.streams.borrow_mut().retain(|(sid, _), _| sid != id);
+            self.favorites.borrow_mut().remove(id);
+            self.history.borrow_mut().remove(id);
             Ok(())
         }
 
@@ -139,6 +194,69 @@ mod tests {
                 .get(&(source_id.to_string(), category_id.to_string()))
                 .cloned()
                 .unwrap_or_default())
+        }
+
+        fn get_setting(&self, key: &str) -> Result<Option<String>, CoreError> {
+            Ok(self.settings.borrow().get(key).cloned())
+        }
+
+        fn set_setting(&self, key: &str, value: &str) -> Result<(), CoreError> {
+            self.settings
+                .borrow_mut()
+                .insert(key.to_string(), value.to_string());
+            Ok(())
+        }
+
+        fn add_favorite(&self, source_id: &str, stream: &Stream) -> Result<(), CoreError> {
+            let seq = self.next_seq();
+            let mut favorites = self.favorites.borrow_mut();
+            recency_upsert(
+                favorites.entry(source_id.to_string()).or_default(),
+                stream,
+                seq,
+            );
+            Ok(())
+        }
+
+        fn remove_favorite(&self, source_id: &str, stream_id: &str) -> Result<(), CoreError> {
+            if let Some(list) = self.favorites.borrow_mut().get_mut(source_id) {
+                list.retain(|(s, _)| s.id.0 != stream_id);
+            }
+            Ok(())
+        }
+
+        fn favorites(&self, source_id: &str) -> Result<Vec<Stream>, CoreError> {
+            Ok(self
+                .favorites
+                .borrow()
+                .get(source_id)
+                .map(|list| recency_sorted(list))
+                .unwrap_or_default())
+        }
+
+        fn record_watch(&self, source_id: &str, stream: &Stream) -> Result<(), CoreError> {
+            let seq = self.next_seq();
+            let mut history = self.history.borrow_mut();
+            recency_upsert(
+                history.entry(source_id.to_string()).or_default(),
+                stream,
+                seq,
+            );
+            Ok(())
+        }
+
+        fn history(&self, source_id: &str) -> Result<Vec<Stream>, CoreError> {
+            Ok(self
+                .history
+                .borrow()
+                .get(source_id)
+                .map(|list| recency_sorted(list))
+                .unwrap_or_default())
+        }
+
+        fn clear_history(&self) -> Result<(), CoreError> {
+            self.history.borrow_mut().clear();
+            Ok(())
         }
     }
 
@@ -213,11 +331,75 @@ mod tests {
         .unwrap();
         cat.replace_streams("a", "1", &[Stream::new("a", "9", "Nine", StreamKind::Live)])
             .unwrap();
+        cat.add_favorite("a", &Stream::new("a", "9", "Nine", StreamKind::Live))
+            .unwrap();
+        cat.record_watch("a", &Stream::new("a", "9", "Nine", StreamKind::Live))
+            .unwrap();
 
         cat.delete_source("a").unwrap();
 
         assert!(cat.sources().unwrap().is_empty());
         assert!(cat.categories("a").unwrap().is_empty());
         assert!(cat.streams("a", "1").unwrap().is_empty());
+        assert!(cat.favorites("a").unwrap().is_empty());
+        assert!(cat.history("a").unwrap().is_empty());
+    }
+
+    #[test]
+    fn settings_get_set_round_trip() {
+        let cat = FakeCatalog::default();
+        assert_eq!(cat.get_setting("settings").unwrap(), None);
+        cat.set_setting("settings", "{\"history_enabled\":false}")
+            .unwrap();
+        assert_eq!(
+            cat.get_setting("settings").unwrap(),
+            Some("{\"history_enabled\":false}".to_string())
+        );
+    }
+
+    #[test]
+    fn favorites_add_remove_and_order() {
+        let cat = FakeCatalog::default();
+        let one = Stream::new("a", "1", "One", StreamKind::Live);
+        let two = Stream::new("a", "2", "Two", StreamKind::Live);
+        cat.add_favorite("a", &one).unwrap();
+        cat.add_favorite("a", &two).unwrap();
+        // Most-recently-added first.
+        let ids: Vec<_> = cat
+            .favorites("a")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(ids, vec![two.id.clone(), one.id.clone()]);
+        // Adding again de-dupes (no second entry).
+        cat.add_favorite("a", &one).unwrap();
+        assert_eq!(cat.favorites("a").unwrap().len(), 2);
+
+        cat.remove_favorite("a", &two.id.0).unwrap();
+        assert_eq!(cat.favorites("a").unwrap(), vec![one]);
+        // Another source is isolated.
+        assert!(cat.favorites("b").unwrap().is_empty());
+    }
+
+    #[test]
+    fn history_records_dedupes_orders_and_clears() {
+        let cat = FakeCatalog::default();
+        let one = Stream::new("a", "1", "One", StreamKind::Live);
+        let two = Stream::new("a", "2", "Two", StreamKind::Live);
+        cat.record_watch("a", &one).unwrap();
+        cat.record_watch("a", &two).unwrap();
+        // Re-watching "one" moves it to the front without duplicating.
+        cat.record_watch("a", &one).unwrap();
+        let ids: Vec<_> = cat
+            .history("a")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(ids, vec![one.id.clone(), two.id.clone()]);
+
+        cat.clear_history().unwrap();
+        assert!(cat.history("a").unwrap().is_empty());
     }
 }
