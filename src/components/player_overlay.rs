@@ -33,12 +33,25 @@ pub fn PlayerOverlay(
 ) -> Element {
     let mut visible = use_signal(|| true);
     let mut last_active = use_signal(Date::now);
+    // The root element, kept so we can pull focus back to it after the user touches a
+    // control. The shortcuts live on the root's `onkeydown`, so a focused slider/button
+    // would otherwise swallow the same keys until the video is clicked.
+    let mut root = use_signal(|| None::<std::rc::Rc<MountedData>>);
+    let refocus = use_callback(move |()| {
+        if let Some(node) = root() {
+            spawn(async move {
+                let _ = node.set_focus(true).await;
+            });
+        }
+    });
 
     use_future(move || async move {
         loop {
             TimeoutFuture::new(400).await;
             if visible() && Date::now() - last_active() > IDLE_MS {
                 visible.set(false);
+                // Don't strand focus on a control that just became unclickable.
+                refocus.call(());
             }
         }
     });
@@ -56,6 +69,7 @@ pub fn PlayerOverlay(
             class: "relative flex h-screen flex-col justify-end outline-none {cursor}",
             tabindex: "0",
             autofocus: true,
+            onmounted: move |e| root.set(Some(e.data())),
             onmousemove: move |_| {
                 last_active.set(Date::now());
                 if !visible() {
@@ -88,6 +102,9 @@ pub fn PlayerOverlay(
                 class: "flex items-center gap-3 bg-black/60 p-3 text-white backdrop-blur-sm \
                     transition-opacity duration-300 {bar_visibility}",
                 onclick: move |e| e.stop_propagation(),
+                // After a click or a finished slider drag, hand focus back to the root
+                // so the keyboard shortcuts keep working without clicking the video.
+                onpointerup: move |_| refocus.call(()),
                 div {
                     class: "min-w-0 flex-1",
                     span { class: "block truncate text-sm font-medium", "{stream.name}" }
