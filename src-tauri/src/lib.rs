@@ -91,6 +91,7 @@ pub fn run() {
             commands::library::record_watch,
             commands::library::clear_history,
             commands::epg::epg_now_next,
+            commands::epg::epg_programmes,
             commands::playback::play_stream,
             commands::playback::pause_playback,
             commands::playback::resume_playback,
