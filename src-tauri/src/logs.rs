@@ -108,17 +108,19 @@ impl<S: Subscriber> Layer<S> for CaptureLayer {
     }
 }
 
-/// The capture filter for a level: scoped to Cathode's own crates so dependency
-/// internals (hyper/reqwest/tao) don't flood the buffer. `Off` captures nothing;
-/// other crates are capped at WARN so their genuine warnings/errors still surface.
+/// The capture filter for a level. The ladder is: `Off` captures nothing; `Trace`
+/// captures *everything* (all crates, the full firehose including dependencies); and
+/// every level in between captures Cathode's own crates at that level while capping
+/// dependencies at WARN — so their genuine errors/warnings still surface, but their
+/// debug/trace spam (hyper/reqwest/tao) does not.
 pub fn targets(level: LogLevel) -> Targets {
     let lf = match level {
         LogLevel::Off => return Targets::new(),
+        LogLevel::Trace => return Targets::new().with_default(LevelFilter::TRACE),
         LogLevel::Error => LevelFilter::ERROR,
         LogLevel::Warn => LevelFilter::WARN,
         LogLevel::Info => LevelFilter::INFO,
         LogLevel::Debug => LevelFilter::DEBUG,
-        LogLevel::Trace => LevelFilter::TRACE,
     };
     Targets::new()
         .with_target("cathode", lf)
