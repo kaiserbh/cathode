@@ -598,7 +598,13 @@ pub fn Browse() -> Element {
                     let text = logs()
                         .iter()
                         .map(|l| {
-                            format!("{} {} {}: {}", l.time, l.level.to_uppercase(), l.target, l.message)
+                            let base =
+                                format!("{} {} {}: {}", l.time, l.level.to_uppercase(), l.target, l.message);
+                            if l.fields.is_empty() {
+                                base
+                            } else {
+                                format!("{base} {}", l.fields)
+                            }
                         })
                         .collect::<Vec<_>>()
                         .join("\n");
