@@ -44,13 +44,10 @@ fn open_catalog(app: &tauri::App) -> Result<SqliteCatalog, AppError> {
 /// user opts in. Returns the buffer and control to be managed by Tauri.
 fn init_tracing() -> (LogStore, LogControl) {
     let store = LogStore::new();
-    let capture = fmt::layer()
-        .with_ansi(false)
-        .with_writer(store.clone())
-        .with_filter(logs::level_filter(LogLevel::Off));
+    let capture = logs::CaptureLayer::new(store.clone()).with_filter(logs::targets(LogLevel::Off));
     let (capture, handle) = reload::Layer::new(capture);
     let control = LogControl::new(move |level| {
-        let _ = handle.modify(move |f| *f.filter_mut() = logs::level_filter(level));
+        let _ = handle.modify(move |f| *f.filter_mut() = logs::targets(level));
     });
 
     Registry::default()
