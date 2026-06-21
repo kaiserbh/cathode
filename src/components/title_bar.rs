@@ -1,7 +1,8 @@
 //! The window titlebar. With the macOS overlay titlebar style the webview extends
 //! under the OS titlebar, so this bar doubles as the drag region (move the window) and
-//! the home for the wordmark, the incognito badge, and the Options / Sources icon
-//! buttons. The left padding clears the native traffic lights.
+//! the home for the Incognito badge and the Options / Sources icon buttons. There is
+//! no app title (the OS title is hidden); the left side is empty draggable space that
+//! sits under the native traffic lights, with the controls grouped on the right.
 
 use dioxus::prelude::*;
 
@@ -20,24 +21,18 @@ pub fn TitleBar(
 ) -> Element {
     rsx! {
         header {
-            // The bar itself drags the window. The traffic lights sit in the left pad.
+            // The empty bar itself drags the window; the traffic lights float over its
+            // left end. Controls cluster on the right.
             "data-tauri-drag-region": "true",
             class: "shrink-0 flex h-11 items-center border-b border-neutral-200 \
-                bg-white pl-20 pr-3 dark:border-neutral-800 dark:bg-neutral-950",
-            // Wordmark + badge: a drag region too, since Tauri only drags when the
-            // pointer target itself carries the attribute.
-            div {
-                "data-tauri-drag-region": "true",
-                class: "flex items-center gap-3",
-                h1 { class: "text-sm font-semibold", "Cathode" }
+                px-3 dark:border-neutral-800 dark:bg-neutral-950 bg-white",
+            div { class: "ml-auto flex items-center gap-2",
                 if incognito {
                     span { class: "rounded-full bg-neutral-800 px-2 py-0.5 text-xs font-medium \
                             text-neutral-100 dark:bg-neutral-200 dark:text-neutral-900",
                         "Incognito"
                     }
                 }
-            }
-            div { class: "ml-auto flex items-center gap-1",
                 button {
                     class: BTN,
                     title: "Options",
