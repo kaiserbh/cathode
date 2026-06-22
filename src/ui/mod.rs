@@ -6,3 +6,7 @@
 pub mod button;
 pub mod dialog;
 pub mod select;
+pub mod switch;
+pub mod tabs;
+pub mod toast;
+pub mod tooltip;
