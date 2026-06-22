@@ -38,6 +38,9 @@
 }
 
 /* Dialog Container - improved for theme consistency */
+/* LOCAL EDIT: max-width is set to none (was calc(100% - 2rem) here plus a
+   @media max-width:32rem below) so the caller's max-w-* class controls the
+   panel width. Re-apply if this component is re-pulled with `dx components add`. */
 .dx-dialog {
   position: fixed;
   z-index: 1001;
@@ -45,7 +48,7 @@
   left: 50%;
   display: flex;
   width: 100%;
-  max-width: calc(100% - 2rem);
+  max-width: none;
   box-sizing: border-box;
   flex-direction: column;
   padding: 32px 24px 24px;
@@ -73,13 +76,6 @@
   margin: 0;
   color: var(--secondary-color-5);
   font-size: 1rem;
-}
-
-@media (width >= 40rem) {
-  .dx-dialog {
-    max-width: 32rem;
-    text-align: left;
-  }
 }
 
 .dx-dialog-close {
