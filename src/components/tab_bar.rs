@@ -4,7 +4,7 @@
 
 use dioxus::prelude::*;
 
-use crate::components::icons::{Film, Series as SeriesIcon, Tv};
+use crate::components::icons::{Film, History, Series as SeriesIcon, Star, Tv};
 
 /// Which browse view is active.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -46,8 +46,8 @@ fn tab_icon(tab: Tab) -> Element {
         Tab::Live => rsx! { Tv { class } },
         Tab::Movies => rsx! { Film { class } },
         Tab::Series => rsx! { SeriesIcon { class } },
-        Tab::Favorites => rsx! { span { class: "text-base leading-none", "★" } },
-        Tab::History => rsx! { span { class: "text-base leading-none", "↺" } },
+        Tab::Favorites => rsx! { Star { class, filled: true } },
+        Tab::History => rsx! { History { class } },
     }
 }
 

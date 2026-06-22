@@ -35,3 +35,13 @@ icon!(Film => Film);
 icon!(Series => MonitorPlay);
 icon!(Search => Search);
 icon!(Bug => Bug);
+icon!(History => History);
+
+/// Favorite star. `filled` solidifies it (the colour comes from the caller's text
+/// colour, since Lucide draws with `currentColor`).
+#[component]
+pub fn Star(class: String, #[props(default)] filled: bool) -> Element {
+    rsx! {
+        lucide::Star { class, fill: if filled { "currentColor" } else { "none" } }
+    }
+}
