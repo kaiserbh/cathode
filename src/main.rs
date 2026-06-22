@@ -4,6 +4,7 @@ mod clipboard;
 mod components;
 mod epg;
 mod format;
+mod ui;
 mod views;
 
 use app::App;

@@ -15,6 +15,9 @@ serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 gloo-timers = { version = "0.3", features = ["futures"] }
 cathode-core = { path = "crates/core" }
+# Pinned to a rev: there is no usable crates.io release, so the git dep is pinned for
+# reproducible builds. Bump deliberately when pulling new components.
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", rev = "02801f27", version = "0.0.1", default-features = false }
 
 [workspace]
 members = ["src-tauri", "crates/core"]
