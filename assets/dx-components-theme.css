@@ -50,10 +50,9 @@ html[data-theme="light"] [class~="dxc-system"] {
   /* Secondary colors */
   --secondary-color: var(--dark, #fff) var(--light, #000);
   --secondary-color-1: var(--dark, #fafafa) var(--light, #000);
-  /* Accent: the strong foreground colour drives primary/link buttons and the
-     slider. Tuned to sky to match Cathode's existing sky/neutral palette
-     (sky-400 in dark, sky-600 in light). Re-apply if `dx components add`
-     regenerates this file. */
+  /* Accent: the strong foreground colour drives primary/link buttons, the slider,
+     switches and tabs. Tuned to sky to match Cathode (sky-400 dark / sky-600 light).
+     Re-apply if `dx components add` regenerates this file. */
   --secondary-color-2: var(--dark, #38bdf8) var(--light, #0284c7);
   --secondary-color-3: var(--dark, #dcdcdc) var(--light, #2b2b2b);
   --secondary-color-4: var(--dark, #d4d4d4) var(--light, #111);
