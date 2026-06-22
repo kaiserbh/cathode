@@ -28,7 +28,6 @@ icon!(Sources => Layers);
 icon!(Close => X);
 icon!(Copy => Copy);
 icon!(Trash => Trash2);
-icon!(Check => Check);
 icon!(Category => Shapes);
 icon!(Tv => Tv);
 icon!(Film => Film);

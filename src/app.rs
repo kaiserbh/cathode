@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 
+use crate::ui::toast::ToastProvider;
 use crate::views::Browse;
 
 // Compiled by Tailwind (via dx) from /tailwind.css at build time.
@@ -14,6 +15,8 @@ pub fn App() -> Element {
     rsx! {
         link { rel: "stylesheet", href: TAILWIND }
         link { rel: "stylesheet", href: DX_THEME }
-        Browse {}
+        // Provider hosts the toast portal + queue; it stays mounted for the app's life so
+        // its portal/listeners never orphan. use_toast() in Browse posts to it.
+        ToastProvider { Browse {} }
     }
 }
