@@ -13,7 +13,7 @@ use cathode_core::catalog::{Catalog, SourceRecord};
 use cathode_core::error::CoreError;
 use cathode_core::model::category::CategoryId;
 use cathode_core::model::id::StreamId;
-use cathode_core::model::{Category, Stream, StreamKind};
+use cathode_core::model::{Category, Programme, Stream, StreamKind};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
 /// A `Catalog` backed by a single mutex-guarded SQLite connection.
@@ -226,6 +226,28 @@ fn migrate(conn: &Connection) -> Result<(), CoreError> {
              COMMIT;",
         )
         .map_err(|e| store("create schema v4", e))?;
+        version = 4;
+    }
+
+    if version < 5 {
+        // Persisted EPG: cache the parsed guide so it loads from disk without a fresh
+        // XMLTV download. Disposable cache, replaced wholesale per source. No natural
+        // primary key (a channel has many programmes); the index serves window queries.
+        conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE programme (
+                 source_id   TEXT NOT NULL,
+                 channel_id  TEXT NOT NULL,
+                 title       TEXT NOT NULL,
+                 description TEXT,
+                 start       INTEGER NOT NULL,
+                 stop        INTEGER NOT NULL
+             );
+             CREATE INDEX programme_window ON programme (source_id, stop, start);
+             PRAGMA user_version = 5;
+             COMMIT;",
+        )
+        .map_err(|e| store("create schema v5", e))?;
     }
 
     Ok(())
@@ -285,6 +307,8 @@ impl Catalog for SqliteCatalog {
             .map_err(|e| store("delete favorites", e))?;
         tx.execute("DELETE FROM history WHERE source_id = ?1", params![id])
             .map_err(|e| store("delete history", e))?;
+        tx.execute("DELETE FROM programme WHERE source_id = ?1", params![id])
+            .map_err(|e| store("delete programmes", e))?;
         tx.execute("DELETE FROM source WHERE id = ?1", params![id])
             .map_err(|e| store("delete source", e))?;
         tx.commit().map_err(|e| store("commit delete", e))
@@ -432,6 +456,67 @@ impl Catalog for SqliteCatalog {
             .map_err(|e| store("query search", e))?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| store("read search", e))
+    }
+
+    fn replace_programmes(
+        &self,
+        source_id: &str,
+        programmes: &[Programme],
+    ) -> Result<(), CoreError> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn
+            .transaction()
+            .map_err(|e| store("begin programmes", e))?;
+        tx.execute(
+            "DELETE FROM programme WHERE source_id = ?1",
+            params![source_id],
+        )
+        .map_err(|e| store("clear programmes", e))?;
+        {
+            let mut stmt = tx
+                .prepare(
+                    "INSERT INTO programme
+                       (source_id, channel_id, title, description, start, stop)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                )
+                .map_err(|e| store("prepare programmes", e))?;
+            for p in programmes {
+                stmt.execute(params![
+                    source_id,
+                    p.channel_id,
+                    p.title,
+                    p.description,
+                    p.start,
+                    p.stop,
+                ])
+                .map_err(|e| store("insert programme", e))?;
+            }
+        }
+        tx.commit().map_err(|e| store("commit programmes", e))
+    }
+
+    fn programmes(&self, source_id: &str, from: i64, to: i64) -> Result<Vec<Programme>, CoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT channel_id, title, description, start, stop FROM programme
+                 WHERE source_id = ?1 AND stop > ?2 AND start < ?3
+                 ORDER BY start",
+            )
+            .map_err(|e| store("prepare programmes", e))?;
+        let rows = stmt
+            .query_map(params![source_id, from, to], |row| {
+                Ok(Programme {
+                    channel_id: row.get(0)?,
+                    title: row.get(1)?,
+                    description: row.get(2)?,
+                    start: row.get(3)?,
+                    stop: row.get(4)?,
+                })
+            })
+            .map_err(|e| store("query programmes", e))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| store("read programmes", e))
     }
 
     fn get_setting(&self, key: &str) -> Result<Option<String>, CoreError> {
@@ -591,6 +676,40 @@ mod tests {
         assert_eq!(ids, vec!["a", "b"]);
         // The payload round-trips so credentials can be recovered.
         assert_eq!(sources[0].payload, record("a").payload);
+    }
+
+    #[test]
+    fn programmes_persist_and_window() {
+        let cat = SqliteCatalog::open_in_memory().unwrap();
+        let p = |start: i64, stop: i64, desc: Option<&str>| Programme {
+            channel_id: "bbc1.uk".to_string(),
+            title: "Show".to_string(),
+            description: desc.map(str::to_string),
+            start,
+            stop,
+        };
+        cat.replace_programmes(
+            "a",
+            &[
+                p(100, 200, Some("first")),
+                p(200, 300, None),
+                p(300, 400, Some("third")),
+            ],
+        )
+        .unwrap();
+
+        // Overlap query returns only the first two, sorted by start, with descriptions.
+        let got = cat.programmes("a", 150, 250).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].start, 100);
+        assert_eq!(got[0].description.as_deref(), Some("first"));
+        assert_eq!(got[1].description, None);
+
+        // A re-sync replaces the whole guide for the source.
+        cat.replace_programmes("a", &[p(500, 600, None)]).unwrap();
+        assert_eq!(cat.programmes("a", 0, 10_000).unwrap().len(), 1);
+        // Another source is empty.
+        assert!(cat.programmes("b", 0, 10_000).unwrap().is_empty());
     }
 
     #[test]
