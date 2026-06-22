@@ -12,6 +12,9 @@ pub struct Programme {
     /// XMLTV channel id (matches a stream's `epg_channel_id`).
     pub channel_id: String,
     pub title: String,
+    /// The `<desc>` text, when the guide carries one.
+    #[serde(default)]
+    pub description: Option<String>,
     /// Start time, Unix seconds (UTC).
     pub start: i64,
     /// Stop time, Unix seconds (UTC).
@@ -36,6 +39,7 @@ mod tests {
             now: Some(Programme {
                 channel_id: "bbc1.uk".to_string(),
                 title: "News".to_string(),
+                description: Some("The latest headlines.".to_string()),
                 start: 1_700_000_000,
                 stop: 1_700_001_800,
             }),

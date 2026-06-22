@@ -39,6 +39,8 @@ pub fn parse_xmltv(xml: &str) -> Result<Guide, CoreError> {
     let mut current: Option<(String, i64, i64)> = None;
     let mut in_title = false;
     let mut title = String::new();
+    let mut in_desc = false;
+    let mut desc = String::new();
 
     let mut current_channel: Option<EpgChannel> = None;
     let mut in_display = false;
@@ -67,21 +69,29 @@ pub fn parse_xmltv(xml: &str) -> Result<Guide, CoreError> {
             Event::Start(e) if e.name().as_ref() == b"programme" => {
                 current = parse_programme_attrs(&e)?;
                 title.clear();
+                desc.clear();
                 in_title = false;
+                in_desc = false;
             }
             Event::Start(e) if e.name().as_ref() == b"title" => in_title = true,
             Event::End(e) if e.name().as_ref() == b"title" => in_title = false,
+            Event::Start(e) if e.name().as_ref() == b"desc" => in_desc = true,
+            Event::End(e) if e.name().as_ref() == b"desc" => in_desc = false,
             Event::End(e) if e.name().as_ref() == b"programme" => {
                 if let Some((channel_id, start, stop)) = current.take() {
+                    let desc = std::mem::take(&mut desc);
                     programmes.push(Programme {
                         channel_id,
                         title: std::mem::take(&mut title),
+                        description: (!desc.is_empty()).then_some(desc),
                         start,
                         stop,
                     });
                 }
                 title.clear();
+                desc.clear();
                 in_title = false;
+                in_desc = false;
             }
 
             Event::Text(e) if in_display => {
@@ -101,6 +111,13 @@ pub fn parse_xmltv(xml: &str) -> Result<Guide, CoreError> {
                     .unescape()
                     .map_err(|e| CoreError::xml("xmltv title", e.to_string()))?;
                 title = text.trim().to_string();
+            }
+            // Likewise the first non-empty <desc>.
+            Event::Text(e) if in_desc && desc.is_empty() => {
+                let text = e
+                    .unescape()
+                    .map_err(|e| CoreError::xml("xmltv desc", e.to_string()))?;
+                desc = text.trim().to_string();
             }
 
             Event::Eof => break,
@@ -178,7 +195,7 @@ mod tests {
   <channel id="itv.uk"><display-name>ITV</display-name></channel>
   <programme channel="bbc1.uk" start="20240115220000 +0000" stop="20240115223000 +0000">
     <title lang="en">News &amp; Weather</title>
-    <desc>ignored</desc>
+    <desc>Headlines and the forecast.</desc>
   </programme>
   <programme channel="bbc1.uk" start="20240115223000 +0000" stop="20240115230000 +0000">
     <title>Film</title>
@@ -202,6 +219,13 @@ mod tests {
             guide.programmes[0].title, "News & Weather",
             "entities unescaped"
         );
+        assert_eq!(
+            guide.programmes[0].description.as_deref(),
+            Some("Headlines and the forecast."),
+            "the <desc> is captured"
+        );
+        // A programme without a <desc> has none.
+        assert_eq!(guide.programmes[1].description, None);
         // 2024-01-15 22:00:00 UTC.
         assert_eq!(guide.programmes[0].start, 1_705_356_000);
         assert_eq!(guide.programmes[0].stop, 1_705_357_800);

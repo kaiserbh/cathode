@@ -3,7 +3,7 @@
 //! Held behind `tauri::State` and injected into command handlers. Today it holds
 //! the HTTP transport and the local catalog handle.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use cathode_core::epg::Guide;
@@ -21,6 +21,10 @@ use crate::http::ReqwestTransport;
 pub struct AppState {
     pub transport: ReqwestTransport,
     pub epg: Mutex<HashMap<String, Guide>>,
+    /// Source ids whose guide is being fetched right now, so a background refresh
+    /// (triggered after serving the guide from the SQLite cache) doesn't kick off a
+    /// second concurrent XMLTV download.
+    pub epg_fetching: Mutex<HashSet<String>>,
 }
 
 impl AppState {

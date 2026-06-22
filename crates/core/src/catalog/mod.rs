@@ -12,7 +12,7 @@
 //! cleanly rather than duplicating.
 
 use crate::error::CoreError;
-use crate::model::{Category, Stream, StreamKind};
+use crate::model::{Category, Programme, Stream, StreamKind};
 
 /// A persisted source, opaque to the catalog: `payload` is a serialized,
 /// source-kind-specific credential blob (for Xtream, JSON of `XtreamCredentials`).
@@ -73,6 +73,18 @@ pub trait Catalog {
     /// case-insensitive, most relevant first. Covers whatever has been synced.
     fn search_streams(&self, source_id: &str, query: &str) -> Result<Vec<Stream>, CoreError>;
 
+    /// Replace a source's cached EPG programmes (the whole guide is re-cached at once),
+    /// so the guide can be served from disk without a fresh XMLTV download.
+    fn replace_programmes(
+        &self,
+        source_id: &str,
+        programmes: &[Programme],
+    ) -> Result<(), CoreError>;
+
+    /// A source's cached programmes overlapping `[from, to)` (Unix seconds), sorted by
+    /// start (empty if none cached).
+    fn programmes(&self, source_id: &str, from: i64, to: i64) -> Result<Vec<Programme>, CoreError>;
+
     /// A persisted app setting value, or `None` if unset. Settings are a generic
     /// key/value store; callers (de)serialize structured values themselves.
     fn get_setting(&self, key: &str) -> Result<Option<String>, CoreError>;
@@ -121,6 +133,7 @@ mod tests {
         // so we can order most-recent-first deterministically.
         favorites: RefCell<HashMap<String, Vec<(Stream, u64)>>>,
         history: RefCell<HashMap<String, Vec<(Stream, u64)>>>,
+        programmes: RefCell<HashMap<String, Vec<Programme>>>,
     }
 
     impl FakeCatalog {
@@ -166,6 +179,7 @@ mod tests {
             self.streams.borrow_mut().retain(|(sid, _, _), _| sid != id);
             self.favorites.borrow_mut().remove(id);
             self.history.borrow_mut().remove(id);
+            self.programmes.borrow_mut().remove(id);
             Ok(())
         }
 
@@ -237,6 +251,38 @@ mod tests {
                 }
             }
             out.sort_by(|a, b| a.name.cmp(&b.name));
+            Ok(out)
+        }
+
+        fn replace_programmes(
+            &self,
+            source_id: &str,
+            programmes: &[Programme],
+        ) -> Result<(), CoreError> {
+            self.programmes
+                .borrow_mut()
+                .insert(source_id.to_string(), programmes.to_vec());
+            Ok(())
+        }
+
+        fn programmes(
+            &self,
+            source_id: &str,
+            from: i64,
+            to: i64,
+        ) -> Result<Vec<Programme>, CoreError> {
+            let mut out: Vec<Programme> = self
+                .programmes
+                .borrow()
+                .get(source_id)
+                .map(|list| {
+                    list.iter()
+                        .filter(|p| p.stop > from && p.start < to)
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default();
+            out.sort_by_key(|p| p.start);
             Ok(out)
         }
 
@@ -469,6 +515,33 @@ mod tests {
         assert!(cat.streams("a", StreamKind::Live, "1").unwrap().is_empty());
         assert!(cat.favorites("a").unwrap().is_empty());
         assert!(cat.history("a").unwrap().is_empty());
+    }
+
+    #[test]
+    fn programmes_replace_and_window() {
+        let cat = FakeCatalog::default();
+        let p = |start: i64, stop: i64| Programme {
+            channel_id: "bbc1.uk".to_string(),
+            title: "Show".to_string(),
+            description: Some("d".to_string()),
+            start,
+            stop,
+        };
+        cat.replace_programmes("a", &[p(100, 200), p(200, 300), p(300, 400)])
+            .unwrap();
+
+        // Window [150, 250) overlaps the first two only.
+        let got = cat.programmes("a", 150, 250).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].start, 100);
+        assert_eq!(got[1].start, 200);
+        assert_eq!(got[0].description.as_deref(), Some("d"));
+
+        // A re-sync replaces rather than appends.
+        cat.replace_programmes("a", &[p(500, 600)]).unwrap();
+        assert_eq!(cat.programmes("a", 0, 10_000).unwrap().len(), 1);
+        // Another source is empty.
+        assert!(cat.programmes("b", 0, 10_000).unwrap().is_empty());
     }
 
     #[test]
