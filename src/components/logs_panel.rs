@@ -7,7 +7,9 @@
 use cathode_core::model::{LogLevel, LogLine};
 use dioxus::prelude::*;
 
+use crate::components::PanelDialog;
 use crate::components::icons::{Close, Copy, Search, Trash};
+use crate::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::ui::select::{Select, SelectGroup, SelectOption};
 
 /// The id of the scroll container, used to keep it pinned to the newest line.
@@ -123,119 +125,114 @@ pub fn LogsPanel(
     }));
 
     rsx! {
+    PanelDialog { class: "max-w-3xl max-h-[80vh]", on_close,
         div {
-            class: "fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 \
-                sm:items-center",
-            onclick: move |_| on_close.call(()),
-            div {
-                class: "flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl bg-white \
-                    text-neutral-900 shadow-xl dark:bg-neutral-900 dark:text-neutral-100",
-                onclick: move |e| e.stop_propagation(),
+            class: "flex items-center gap-3 border-b border-neutral-200 px-5 py-3 \
+                dark:border-neutral-800",
+                h2 { class: "shrink-0 text-base font-semibold", "Logs" }
                 div {
-                    class: "flex items-center gap-3 border-b border-neutral-200 px-5 py-3 \
-                        dark:border-neutral-800",
-                    h2 { class: "shrink-0 text-base font-semibold", "Logs" }
-                    div {
-                        class: "flex shrink-0 items-center gap-2 text-sm text-neutral-500",
-                        "Level"
-                        Select::<String> {
-                            value: Some(selected.into()),
-                            on_value_change: move |v: Option<String>| {
-                                on_set_level.call(level_from_value(v.as_deref().unwrap_or("Off")));
-                            },
-                            SelectGroup {
-                                for (i, (_, name)) in LEVELS.iter().enumerate() {
-                                    SelectOption::<String> {
-                                        index: i,
-                                        value: name.to_string(),
-                                        text_value: *name,
-                                        {*name}
-                                    }
+                    class: "flex shrink-0 items-center gap-2 text-sm text-neutral-500",
+                    "Level"
+                    Select::<String> {
+                        value: Some(selected.into()),
+                        on_value_change: move |v: Option<String>| {
+                            on_set_level.call(level_from_value(v.as_deref().unwrap_or("Off")));
+                        },
+                        SelectGroup {
+                            for (i, (_, name)) in LEVELS.iter().enumerate() {
+                                SelectOption::<String> {
+                                    index: i,
+                                    value: name.to_string(),
+                                    text_value: *name,
+                                    {*name}
                                 }
                             }
-                        }
-                    }
-                    // Search box (middle).
-                    div {
-                        class: "flex min-w-0 flex-1 items-center gap-2 rounded-md bg-neutral-100 \
-                            px-2 py-1 focus-within:ring-2 focus-within:ring-sky-400 \
-                            dark:bg-neutral-800",
-                        Search { class: "h-4 w-4 shrink-0 text-neutral-400" }
-                        input {
-                            class: "w-full bg-transparent text-sm text-neutral-900 \
-                                placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100",
-                            placeholder: "Filter logs…",
-                            value: "{query}",
-                            oninput: move |e| query.set(e.value()),
-                        }
-                        if !query().is_empty() {
-                            span { class: "shrink-0 text-xs text-neutral-400", "{shown}/{total}" }
-                            button {
-                                class: "shrink-0 rounded p-0.5 text-neutral-400 \
-                                    hover:text-neutral-700 dark:hover:text-neutral-200",
-                                title: "Clear search",
-                                onclick: move |_| query.set(String::new()),
-                                Close { class: "h-3.5 w-3.5" }
-                            }
-                        }
-                    }
-                    div {
-                        class: "ml-auto flex shrink-0 items-center gap-1",
-                        button {
-                            class: BTN,
-                            title: "Copy",
-                            onclick: move |_| on_copy.call(()),
-                            Copy { class: ICON }
-                        }
-                        button {
-                            class: BTN,
-                            title: "Clear",
-                            onclick: move |_| on_clear.call(()),
-                            Trash { class: ICON }
-                        }
-                        button {
-                            class: BTN,
-                            title: "Close",
-                            onclick: move |_| on_close.call(()),
-                            Close { class: ICON }
                         }
                     }
                 }
-
-                if logs.is_empty() {
-                    p {
-                        class: "px-5 py-10 text-center text-sm text-neutral-500",
-                        if level == LogLevel::Off {
-                            "Logging is off — pick a level to start capturing."
-                        } else {
-                            "No log lines captured yet."
+                // Search box (middle).
+                div {
+                    class: "flex min-w-0 flex-1 items-center gap-2 rounded-md bg-neutral-100 \
+                        px-2 py-1 focus-within:ring-2 focus-within:ring-sky-400 \
+                        dark:bg-neutral-800",
+                    Search { class: "h-4 w-4 shrink-0 text-neutral-400" }
+                    input {
+                        class: "w-full bg-transparent text-sm text-neutral-900 \
+                            placeholder:text-neutral-400 focus:outline-none dark:text-neutral-100",
+                        placeholder: "Filter logs…",
+                        value: "{query}",
+                        oninput: move |e| query.set(e.value()),
+                    }
+                    if !query().is_empty() {
+                        span { class: "shrink-0 text-xs text-neutral-400", "{shown}/{total}" }
+                        button {
+                            class: "shrink-0 rounded p-0.5 text-neutral-400 \
+                                hover:text-neutral-700 dark:hover:text-neutral-200",
+                            title: "Clear search",
+                            onclick: move |_| query.set(String::new()),
+                            Close { class: "h-3.5 w-3.5" }
                         }
                     }
-                } else if visible.is_empty() {
-                    p {
-                        class: "px-5 py-10 text-center text-sm text-neutral-500",
-                        "No lines match."
+                }
+                div {
+                    class: "ml-auto flex shrink-0 items-center gap-1",
+                    Button {
+                        variant: ButtonVariant::Ghost,
+                        size: ButtonSize::IconSm,
+                        title: "Copy",
+                        onclick: move |_| on_copy.call(()),
+                        Copy { class: ICON }
                     }
-                } else {
-                    div {
-                        id: SCROLL_ID,
-                        class: "m-4 flex-1 overflow-auto rounded-md bg-neutral-950 p-3 font-mono \
-                            text-xs leading-relaxed",
-                        for line in visible.iter() {
-                            div {
-                                class: "flex gap-3",
-                                span { class: "shrink-0 text-neutral-600", "{line.time}" }
-                                span {
-                                    class: "w-12 shrink-0 font-semibold uppercase {level_color(&line.level)}",
-                                    "{line.level}"
-                                }
-                                span {
-                                    class: "min-w-0 flex-1 break-words",
-                                    span { class: "text-indigo-400", "{line.target}: " }
-                                    span { class: message_color(&line.level), "{line.message}" }
-                                    if !line.fields.is_empty() {
-                                        span { class: "text-cyan-400/70", " {line.fields}" }
-                                    }
+                    Button {
+                        variant: ButtonVariant::Ghost,
+                        size: ButtonSize::IconSm,
+                        title: "Clear",
+                        onclick: move |_| on_clear.call(()),
+                        Trash { class: ICON }
+                    }
+                    Button {
+                        variant: ButtonVariant::Ghost,
+                        size: ButtonSize::IconSm,
+                        title: "Close",
+                        onclick: move |_| on_close.call(()),
+                        Close { class: ICON }
+                    }
+                }
+            }
+
+            if logs.is_empty() {
+                p {
+                    class: "px-5 py-10 text-center text-sm text-neutral-500",
+                    if level == LogLevel::Off {
+                        "Logging is off — pick a level to start capturing."
+                    } else {
+                        "No log lines captured yet."
+                    }
+                }
+            } else if visible.is_empty() {
+                p {
+                    class: "px-5 py-10 text-center text-sm text-neutral-500",
+                    "No lines match."
+                }
+            } else {
+                div {
+                    id: SCROLL_ID,
+                    class: "m-4 flex-1 overflow-auto rounded-md bg-neutral-950 p-3 font-mono \
+                        text-xs leading-relaxed",
+                    for line in visible.iter() {
+                        div {
+                            class: "flex gap-3",
+                            span { class: "shrink-0 text-neutral-600", "{line.time}" }
+                            span {
+                                class: "w-12 shrink-0 font-semibold uppercase {level_color(&line.level)}",
+                                "{line.level}"
+                            }
+                            span {
+                                class: "min-w-0 flex-1 break-words",
+                                span { class: "text-indigo-400", "{line.target}: " }
+                                span { class: message_color(&line.level), "{line.message}" }
+                                if !line.fields.is_empty() {
+                                    span { class: "text-cyan-400/70", " {line.fields}" }
                                 }
                             }
                         }
@@ -246,7 +243,4 @@ pub fn LogsPanel(
     }
 }
 
-const BTN: &str = "rounded-full p-2 text-neutral-500 hover:bg-neutral-100 \
-    focus:outline-none focus:ring-2 focus:ring-sky-400 dark:text-neutral-300 \
-    dark:hover:bg-neutral-800";
 const ICON: &str = "h-5 w-5";
