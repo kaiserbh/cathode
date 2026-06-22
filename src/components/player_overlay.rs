@@ -221,6 +221,10 @@ pub fn PlayerOverlay(
                         style: "--primary-color-5: rgba(255,255,255,0.25); \
                             --secondary-color-2: #38bdf8; --primary-color-1: #fff;",
                         Slider {
+                            // The vendored slider defaults to min-width:200px; override it so
+                            // it fits the w-24 wrapper instead of overflowing onto (and
+                            // stealing clicks from) the neighbouring controls.
+                            style: "min-width: 0; width: 100%;",
                             value: Some(f64::from(volume)),
                             min: 0.0,
                             max: 100.0,
