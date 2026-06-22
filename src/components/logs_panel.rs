@@ -127,7 +127,7 @@ pub fn LogsPanel(
     }));
 
     rsx! {
-    PanelDialog { class: "max-w-4xl max-h-[85vh]", on_close,
+    PanelDialog { class: "max-w-4xl min-h-[60vh] max-h-[85vh]", on_close,
         div {
             class: "flex items-center gap-3 border-b border-neutral-200 px-5 py-3 \
                 dark:border-neutral-800",
@@ -204,7 +204,8 @@ pub fn LogsPanel(
 
             if logs.is_empty() {
                 p {
-                    class: "px-5 py-10 text-center text-sm text-neutral-500",
+                    class: "flex flex-1 items-center justify-center px-5 text-center \
+                        text-sm text-neutral-500",
                     if level == LogLevel::Off {
                         "Logging is off — pick a level to start capturing."
                     } else {
@@ -213,7 +214,8 @@ pub fn LogsPanel(
                 }
             } else if visible.is_empty() {
                 p {
-                    class: "px-5 py-10 text-center text-sm text-neutral-500",
+                    class: "flex flex-1 items-center justify-center px-5 text-center \
+                        text-sm text-neutral-500",
                     "No lines match."
                 }
             } else {
