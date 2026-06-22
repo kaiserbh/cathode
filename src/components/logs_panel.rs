@@ -127,7 +127,7 @@ pub fn LogsPanel(
     }));
 
     rsx! {
-    PanelDialog { class: "max-w-3xl max-h-[80vh]", on_close,
+    PanelDialog { class: "max-w-4xl max-h-[85vh]", on_close,
         div {
             class: "flex items-center gap-3 border-b border-neutral-200 px-5 py-3 \
                 dark:border-neutral-800",

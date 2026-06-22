@@ -26,7 +26,7 @@ pub fn PanelDialog(
             // dismissal still work and clean up on drop.
             is_modal: false,
             on_open_change: move |open: bool| if !open { on_close.call(()) },
-            class: "{class} w-full p-0! gap-0! rounded-xl! border-0! text-left! shadow-xl \
+            class: "{class} p-0! gap-0! rounded-xl! border-0! text-left! shadow-xl \
                 bg-white! text-neutral-900! dark:bg-neutral-900! dark:text-neutral-100!",
             {children}
         }
