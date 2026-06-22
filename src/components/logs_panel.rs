@@ -95,8 +95,10 @@ pub fn LogsPanel(
     on_clear: EventHandler<()>,
     on_close: EventHandler<()>,
 ) -> Element {
-    // Controlled selection for the level Select: a memo so it tracks the `level` prop.
-    let selected = use_memo(move || Some(level_value(level).to_string()));
+    // Controlled selection for the level Select. use_reactive! so the memo re-runs when
+    // the `level` prop changes; a plain `move ||` closure would capture the initial level
+    // and leave the dropdown stuck on whatever was selected when the panel opened.
+    let selected = use_memo(use_reactive!(|level| Some(level_value(level).to_string())));
     let mut query = use_signal(String::new);
 
     // Filter to the selected level and the search query.
