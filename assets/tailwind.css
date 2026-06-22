@@ -732,9 +732,6 @@
   .py-1 {
     padding-block: calc(var(--spacing) * 1);
   }
-  .py-1\.5 {
-    padding-block: calc(var(--spacing) * 1.5);
-  }
   .py-2 {
     padding-block: calc(var(--spacing) * 2);
   }
@@ -850,9 +847,6 @@
   }
   .text-red-400 {
     color: var(--color-red-400);
-  }
-  .text-red-700 {
-    color: var(--color-red-700);
   }
   .text-red-800 {
     color: var(--color-red-800);
@@ -992,13 +986,6 @@
       }
     }
   }
-  .hover\:bg-red-50 {
-    &:hover {
-      @media (hover: hover) {
-        background-color: var(--color-red-50);
-      }
-    }
-  }
   .hover\:bg-sky-500 {
     &:hover {
       @media (hover: hover) {
@@ -1071,11 +1058,6 @@
     &:focus {
       --tw-outline-style: none;
       outline-style: none;
-    }
-  }
-  .disabled\:opacity-50 {
-    &:disabled {
-      opacity: 50%;
     }
   }
   .sm\:grid-cols-3 {
@@ -1277,11 +1259,6 @@
       color: var(--color-red-200);
     }
   }
-  .dark\:text-red-300 {
-    @media (prefers-color-scheme: dark) {
-      color: var(--color-red-300);
-    }
-  }
   .dark\:text-sky-300 {
     @media (prefers-color-scheme: dark) {
       color: var(--color-sky-300);
@@ -1311,15 +1288,6 @@
       &:hover {
         @media (hover: hover) {
           background-color: var(--color-neutral-800);
-        }
-      }
-    }
-  }
-  .dark\:hover\:bg-red-950 {
-    @media (prefers-color-scheme: dark) {
-      &:hover {
-        @media (hover: hover) {
-          background-color: var(--color-red-950);
         }
       }
     }
