@@ -127,13 +127,11 @@ pub fn LogsPanel(
     }));
 
     rsx! {
-    PanelDialog { class: "max-w-4xl min-h-[60vh] max-h-[85vh]", on_close,
-        div {
-            class: "flex items-center gap-3 border-b border-neutral-200 px-5 py-3 \
+        PanelDialog { class: "max-w-4xl min-h-[85vh] max-h-[85vh]", on_close,
+            div { class: "flex items-center gap-3 border-b border-neutral-200 px-5 py-3 \
                 dark:border-neutral-800",
                 h2 { class: "shrink-0 text-base font-semibold", "Logs" }
-                div {
-                    class: "flex shrink-0 items-center gap-2 text-sm text-neutral-500",
+                div { class: "flex shrink-0 items-center gap-2 text-sm text-neutral-500",
                     "Level"
                     Select::<String> {
                         value: Some(selected.into()),
@@ -141,7 +139,7 @@ pub fn LogsPanel(
                             on_set_level.call(level_from_value(v.as_deref().unwrap_or("Off")));
                         },
                         SelectGroup {
-                            for (i, (_, name)) in LEVELS.iter().enumerate() {
+                            for (i , (_ , name)) in LEVELS.iter().enumerate() {
                                 SelectOption::<String> {
                                     index: i,
                                     value: name.to_string(),
@@ -153,8 +151,7 @@ pub fn LogsPanel(
                     }
                 }
                 // Search box (middle).
-                div {
-                    class: "flex min-w-0 flex-1 items-center gap-2 rounded-md bg-neutral-100 \
+                div { class: "flex min-w-0 flex-1 items-center gap-2 rounded-md bg-neutral-100 \
                         px-2 py-1 focus-within:ring-2 focus-within:ring-sky-400 \
                         dark:bg-neutral-800",
                     Search { class: "h-4 w-4 shrink-0 text-neutral-400" }
@@ -176,8 +173,7 @@ pub fn LogsPanel(
                         }
                     }
                 }
-                div {
-                    class: "ml-auto flex shrink-0 items-center gap-1",
+                div { class: "ml-auto flex shrink-0 items-center gap-1",
                     Button {
                         variant: ButtonVariant::Ghost,
                         size: ButtonSize::IconSm,
@@ -203,8 +199,7 @@ pub fn LogsPanel(
             }
 
             if logs.is_empty() {
-                p {
-                    class: "flex flex-1 items-center justify-center px-5 text-center \
+                p { class: "flex flex-1 items-center justify-center px-5 text-center \
                         text-sm text-neutral-500",
                     if level == LogLevel::Off {
                         "Logging is off — pick a level to start capturing."
@@ -213,8 +208,7 @@ pub fn LogsPanel(
                     }
                 }
             } else if visible.is_empty() {
-                p {
-                    class: "flex flex-1 items-center justify-center px-5 text-center \
+                p { class: "flex flex-1 items-center justify-center px-5 text-center \
                         text-sm text-neutral-500",
                     "No lines match."
                 }
@@ -224,15 +218,12 @@ pub fn LogsPanel(
                     class: "m-4 flex-1 overflow-auto rounded-md bg-neutral-950 p-3 font-mono \
                         text-xs leading-relaxed",
                     for line in visible.iter() {
-                        div {
-                            class: "flex gap-3",
+                        div { class: "flex gap-3",
                             span { class: "shrink-0 text-neutral-600", "{line.time}" }
-                            span {
-                                class: "w-12 shrink-0 font-semibold uppercase {level_color(&line.level)}",
+                            span { class: "w-12 shrink-0 font-semibold uppercase {level_color(&line.level)}",
                                 "{line.level}"
                             }
-                            span {
-                                class: "min-w-0 flex-1 break-words",
+                            span { class: "min-w-0 flex-1 break-words",
                                 span { class: "text-indigo-400", "{line.target}: " }
                                 span { class: message_color(&line.level), "{line.message}" }
                                 if !line.fields.is_empty() {
