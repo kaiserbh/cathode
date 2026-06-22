@@ -382,6 +382,9 @@
   .min-h-0 {
     min-height: calc(var(--spacing) * 0);
   }
+  .min-h-\[60vh\] {
+    min-height: 60vh;
+  }
   .w-0\.5 {
     width: calc(var(--spacing) * 0.5);
   }
