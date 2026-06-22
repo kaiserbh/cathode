@@ -103,7 +103,10 @@ pub fn EpgGuide(
             VirtualList {
                 count: row_streams.len(),
                 estimate_size: move |_idx: usize| ROW_H as u32,
-                style: "overflow: auto; flex: 1 1 0%;",
+                // min-height:0 lets this flex item shrink to the available space and scroll
+                // its canvas internally; without it the item grows to the full virtual
+                // height and the whole guide scrolls past the channels.
+                style: "overflow: auto; flex: 1 1 0%; min-height: 0;",
                 render_item: move |idx: usize| {
                     let stream = row_streams[idx].clone();
                     let progs = resolve(&row_programmes, &stream).cloned();
