@@ -18,6 +18,7 @@ cathode-core = { path = "crates/core" }
 # Pinned to a rev: there is no usable crates.io release, so the git dep is pinned for
 # reproducible builds. Bump deliberately when pulling new components.
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", rev = "02801f27", version = "0.0.1", default-features = false }
+dioxus-icons = { version = "0.1.0", default-features = false }
 
 [workspace]
 members = ["src-tauri", "crates/core"]
