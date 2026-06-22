@@ -61,7 +61,12 @@ body {
 .cathode-range::-webkit-slider-runnable-track {
     height: 0.375rem;
     border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.3);
+    /* Sky fill up to the thumb; --vol is the 0–100% position set inline by the caller. */
+    background: linear-gradient(
+        to right,
+        #38bdf8 var(--vol, 0%),
+        rgba(255, 255, 255, 0.3) var(--vol, 0%)
+    );
 }
 .cathode-range::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -79,7 +84,11 @@ body {
 .cathode-range::-moz-range-track {
     height: 0.375rem;
     border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.3);
+    background: linear-gradient(
+        to right,
+        #38bdf8 var(--vol, 0%),
+        rgba(255, 255, 255, 0.3) var(--vol, 0%)
+    );
 }
 .cathode-range::-moz-range-thumb {
     width: 0.875rem;

@@ -220,6 +220,8 @@ pub fn PlayerOverlay(
                         min: "0",
                         max: "100",
                         value: "{volume}",
+                        // --vol drives the CSS gradient fill up to the thumb.
+                        style: "--vol: {volume}%",
                         class: "cathode-range mx-1 w-24",
                         oninput: move |e| {
                             if let Ok(v) = e.value().parse::<u8>() {
