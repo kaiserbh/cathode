@@ -47,6 +47,8 @@ const TRIGGER: &str = "inline-flex items-center gap-1.5";
 #[component]
 pub fn TabBar(
     active: Tab,
+    show_movies: bool,
+    show_series: bool,
     show_favorites: bool,
     show_history: bool,
     on_select: EventHandler<Tab>,
@@ -63,13 +65,17 @@ pub fn TabBar(
                     Tv { class: "h-4 w-4" }
                     "Live"
                 }
-                TabTrigger { value: "movies", index: 1usize, class: TRIGGER,
-                    Film { class: "h-4 w-4" }
-                    "Movies"
+                if show_movies {
+                    TabTrigger { value: "movies", index: 1usize, class: TRIGGER,
+                        Film { class: "h-4 w-4" }
+                        "Movies"
+                    }
                 }
-                TabTrigger { value: "series", index: 2usize, class: TRIGGER,
-                    SeriesIcon { class: "h-4 w-4" }
-                    "Series"
+                if show_series {
+                    TabTrigger { value: "series", index: 2usize, class: TRIGGER,
+                        SeriesIcon { class: "h-4 w-4" }
+                        "Series"
+                    }
                 }
                 if show_favorites {
                     TabTrigger { value: "favorites", index: 3usize, class: TRIGGER,

@@ -43,6 +43,15 @@ fn tab_kind(tab: Tab) -> Option<StreamKind> {
     }
 }
 
+/// Record whether the active account offers a content kind (>=1 category).
+fn mark_available(available: &mut Signal<HashSet<StreamKind>>, kind: StreamKind, present: bool) {
+    if present {
+        available.write().insert(kind);
+    } else {
+        available.write().remove(&kind);
+    }
+}
+
 #[component]
 pub fn Browse() -> Element {
     let mut creds = use_signal(|| None::<XtreamCredentials>);
@@ -78,6 +87,9 @@ pub fn Browse() -> Element {
     // `(source|kind)` keys we've already background-prefetched this session, so the
     // sweep that warms the cache runs at most once per account + content kind.
     let mut prefetched = use_signal(HashSet::<String>::new);
+    // Content kinds the active account actually offers (>=1 category). Drives which
+    // content tabs are shown, so a live-only provider doesn't get dead Movies/Series tabs.
+    let mut available = use_signal(HashSet::<StreamKind>::new);
 
     // Make a source active: reset to the Live tab (the per-kind effect below loads its
     // categories), and load its favorites + history + EPG.
@@ -171,6 +183,32 @@ pub fn Browse() -> Element {
         let t = tab();
         if let (Some(kind), Some(current)) = (tab_kind(t), creds.read().clone()) {
             load_kind.call((current, kind));
+        }
+    });
+
+    // Detect which content kinds the active account offers (>=1 category) so the tab bar
+    // can hide kinds the provider doesn't have. Cheap: one category list per kind, read
+    // from cache first (instant) then refreshed from the network.
+    use_effect(move || {
+        let Some(current) = creds.read().clone() else {
+            available.set(HashSet::new());
+            return;
+        };
+        available.set(HashSet::new());
+        for kind in [StreamKind::Live, StreamKind::Vod, StreamKind::Series] {
+            let current = current.clone();
+            spawn(async move {
+                if let Ok(cached) = bindings::cached_categories(&current, kind).await
+                    && creds.read().as_ref() == Some(&current)
+                {
+                    mark_available(&mut available, kind, !cached.is_empty());
+                }
+                if let Ok(list) = bindings::list_categories(&current, kind).await
+                    && creds.read().as_ref() == Some(&current)
+                {
+                    mark_available(&mut available, kind, !list.is_empty());
+                }
+            });
         }
     });
 
@@ -485,8 +523,14 @@ pub fn Browse() -> Element {
     let channel_view = current_settings.channel_view;
     let favorite_ids: Vec<StreamId> = favorites().iter().map(|s| s.id.clone()).collect();
 
-    // A disabled feature's tab falls back to Live.
+    // Which content kinds this account offers (hides Movies/Series for live-only providers).
+    let has_movies = available.read().contains(&StreamKind::Vod);
+    let has_series = available.read().contains(&StreamKind::Series);
+
+    // A disabled feature's or unavailable kind's tab falls back to Live.
     let current_tab = match tab() {
+        Tab::Movies if !has_movies => Tab::Live,
+        Tab::Series if !has_series => Tab::Live,
         Tab::Favorites if !favorites_enabled => Tab::Live,
         Tab::History if !history_enabled => Tab::Live,
         t => t,
@@ -543,6 +587,8 @@ pub fn Browse() -> Element {
             if connected {
                 TabBar {
                     active: current_tab,
+                    show_movies: has_movies,
+                    show_series: has_series,
                     show_favorites: favorites_enabled,
                     show_history: history_enabled,
                     on_select: move |t| tab.set(t),
