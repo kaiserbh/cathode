@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use cathode_core::model::{NowNext, Stream, StreamId};
 use dioxus::prelude::*;
 
+use crate::components::icons::Star;
+
 #[component]
 pub fn StreamGrid(
     streams: Vec<Stream>,
@@ -81,7 +83,7 @@ pub fn StreamGrid(
                                     e.stop_propagation();
                                     on_toggle_favorite.call(favorited.clone());
                                 },
-                                if is_favorite { "★" } else { "☆" }
+                                Star { class: "h-4 w-4", filled: is_favorite }
                             }
                         }
                     }

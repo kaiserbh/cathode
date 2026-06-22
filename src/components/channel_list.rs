@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use cathode_core::model::{NowNext, Stream, StreamId};
 use dioxus::prelude::*;
 
+use crate::components::icons::Star;
 use crate::format::hhmm;
 
 #[component]
@@ -86,7 +87,7 @@ pub fn ChannelList(
                                     e.stop_propagation();
                                     on_toggle_favorite.call(favorited.clone());
                                 },
-                                if is_favorite { "★" } else { "☆" }
+                                Star { class: "h-5 w-5", filled: is_favorite }
                             }
                         }
                     }
