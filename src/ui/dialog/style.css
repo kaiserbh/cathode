@@ -38,16 +38,17 @@
 }
 
 /* Dialog Container - improved for theme consistency */
-/* LOCAL EDIT: max-width is set to none (was calc(100% - 2rem) here plus a
-   @media max-width:32rem below) so the caller's max-w-* class controls the
-   panel width. Re-apply if this component is re-pulled with `dx components add`. */
+/* LOCAL EDIT: width is calc(100% - 2rem) so the panel always keeps a 1rem margin from
+   the screen edges (responsive on phones/TV); max-width:none lets the caller's max-w-*
+   class cap and centre it on larger screens. Upstream hardcoded width:100% +
+   max-width:calc(100% - 2rem) + a @media 32rem cap. Re-apply if re-pulled. */
 .dx-dialog {
   position: fixed;
   z-index: 1001;
   top: 50%;
   left: 50%;
   display: flex;
-  width: 100%;
+  width: calc(100% - 2rem);
   max-width: none;
   box-sizing: border-box;
   flex-direction: column;
@@ -58,8 +59,9 @@
   background: var(--primary-color-2);
   box-shadow: 0 2px 10px rgb(0 0 0 / 18%);
   color: var(--secondary-color-4);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
   gap: 16px;
   text-align: center;
   transform: translate(-50%, -50%);
