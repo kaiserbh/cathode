@@ -1,12 +1,15 @@
 //! The window titlebar. With the macOS overlay titlebar style the webview extends
 //! under the OS titlebar, so this bar doubles as the drag region (move the window). It
 //! holds a centered library search box and, on the right, the Incognito badge and the
-//! Logs / Options / Sources icon buttons. The OS title is hidden; the empty space is
-//! draggable and the native traffic lights float over its left end.
+//! Logs / Options / Sources icon buttons (each with a tooltip). The OS title is hidden;
+//! the empty chrome areas carry `data-tauri-drag-region` so they drag the window, while
+//! the native traffic lights float over the left end.
 
 use dioxus::prelude::*;
+use dioxus_primitives::ContentSide;
 
 use crate::components::icons::{Bug, Close, Search, Settings, Sources};
+use crate::ui::tooltip::{Tooltip, TooltipContent, TooltipTrigger};
 
 const BTN: &str = "rounded-md p-1 text-neutral-600 hover:bg-neutral-100 \
     focus:outline-none focus:ring-2 focus:ring-sky-400 dark:text-neutral-300 \
@@ -28,27 +31,11 @@ pub fn TitleBar(
             "data-tauri-drag-region": "true",
             class: "shrink-0 flex h-8 items-center gap-2 border-b border-neutral-200 \
                 px-2 dark:border-neutral-800 dark:bg-neutral-950 bg-white",
-            onmousedown: move |_| {
-                // Belt-and-suspenders drag: call startDragging() directly so dragging
-                // works even if Tauri's attribute-based listener missed the element
-                // (injected script runs before Dioxus/WASM boots the DOM).
-                // Skip interactive elements so clicks on the search input and buttons
-                // don't accidentally start a window drag.
-                let _ = document::eval(
-                    r#"(function(){
-                        var t = event.target;
-                        var skip = ['INPUT','BUTTON','SELECT','TEXTAREA','A'];
-                        if (!skip.includes(t.tagName)) {
-                            window.__TAURI__.window.getCurrent().startDragging();
-                        }
-                    })()"#,
-                );
-            },
             // Left spacer: covers the native macOS traffic-light buttons (~72 px) plus
-            // an extra margin so there is visible drag area to their right.
-            div { class: "w-28 shrink-0" }
+            // an extra margin. Draggable so the window moves from here.
+            div { "data-tauri-drag-region": "true", class: "w-28 shrink-0" }
             // Centered search; the surrounding empty space stays draggable.
-            div { class: "flex flex-1 justify-center",
+            div { "data-tauri-drag-region": "true", class: "flex flex-1 justify-center",
                 div {
                     class: "flex h-6 w-full max-w-md items-center gap-1.5 rounded-md bg-neutral-100 \
                         px-2 focus-within:ring-2 focus-within:ring-sky-400 dark:bg-neutral-800",
@@ -71,30 +58,36 @@ pub fn TitleBar(
                     }
                 }
             }
-            div { class: "flex shrink-0 items-center gap-0.5",
+            div { "data-tauri-drag-region": "true", class: "flex shrink-0 items-center gap-0.5",
                 if incognito {
                     span { class: "rounded-full bg-neutral-800 px-2 py-0.5 text-xs font-medium \
                             text-neutral-100 dark:bg-neutral-200 dark:text-neutral-900",
                         "Incognito"
                     }
                 }
-                button {
-                    class: BTN,
-                    title: "Logs",
-                    onclick: move |_| on_logs.call(()),
-                    Bug { class: ICON }
+                Tooltip {
+                    TooltipTrigger {
+                        button { class: BTN, onclick: move |_| on_logs.call(()),
+                            Bug { class: ICON }
+                        }
+                    }
+                    TooltipContent { side: ContentSide::Bottom, "Logs" }
                 }
-                button {
-                    class: BTN,
-                    title: "Options",
-                    onclick: move |_| on_options.call(()),
-                    Settings { class: ICON }
+                Tooltip {
+                    TooltipTrigger {
+                        button { class: BTN, onclick: move |_| on_options.call(()),
+                            Settings { class: ICON }
+                        }
+                    }
+                    TooltipContent { side: ContentSide::Bottom, "Options" }
                 }
-                button {
-                    class: BTN,
-                    title: "Sources",
-                    onclick: move |_| on_sources.call(()),
-                    Sources { class: ICON }
+                Tooltip {
+                    TooltipTrigger {
+                        button { class: BTN, onclick: move |_| on_sources.call(()),
+                            Sources { class: ICON }
+                        }
+                    }
+                    TooltipContent { side: ContentSide::Bottom, "Sources" }
                 }
             }
         }
