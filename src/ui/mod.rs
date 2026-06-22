@@ -6,4 +6,3 @@
 pub mod button;
 pub mod dialog;
 pub mod select;
-pub mod slider;
