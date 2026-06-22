@@ -10,3 +10,4 @@ pub mod switch;
 pub mod tabs;
 pub mod toast;
 pub mod tooltip;
+pub mod virtual_list;
