@@ -5,6 +5,7 @@
 use cathode_core::model::{ChannelView, Settings};
 use dioxus::prelude::*;
 
+use crate::components::PanelDialog;
 use crate::components::Toggle;
 use crate::components::icons::Close;
 use crate::ui::button::{Button, ButtonSize, ButtonVariant};
@@ -22,100 +23,92 @@ pub fn SettingsPanel(
     on_close: EventHandler<()>,
 ) -> Element {
     rsx! {
-        div {
-            class: "fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 \
-                sm:items-center",
-            onclick: move |_| on_close.call(()),
+        PanelDialog { class: "max-w-lg", on_close,
             div {
-                class: "w-full max-w-lg rounded-xl bg-white text-neutral-900 shadow-xl \
-                    dark:bg-neutral-900 dark:text-neutral-100",
-                onclick: move |e| e.stop_propagation(),
+            class: "flex items-center justify-between border-b border-neutral-200 \
+                px-5 py-4 dark:border-neutral-800",
+                h2 { class: "text-base font-semibold", "Options" }
+                Button {
+                    variant: ButtonVariant::Ghost,
+                    size: ButtonSize::IconSm,
+                    title: "Close",
+                    onclick: move |_| on_close.call(()),
+                    Close { class: "h-5 w-5" }
+                }
+            }
+
+            div {
+                class: "flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800",
+                ToggleRow {
+                    label: "Favorites",
+                    description: "Show the star on channels and the Favorites tab.",
+                    value: settings.favorites_enabled,
+                    on_toggle: on_toggle_favorites,
+                }
+                ToggleRow {
+                    label: "Record watch history",
+                    description: "Keep a list of what you've played.",
+                    value: settings.history_enabled,
+                    on_toggle: on_toggle_history,
+                }
+                ToggleRow {
+                    label: "Program guide (EPG)",
+                    description: "Fetch and show Now / Next on channels.",
+                    value: settings.epg_enabled,
+                    on_toggle: on_toggle_epg,
+                }
                 div {
-                    class: "flex items-center justify-between border-b border-neutral-200 \
-                        px-5 py-4 dark:border-neutral-800",
-                    h2 { class: "text-base font-semibold", "Options" }
-                    Button {
-                        variant: ButtonVariant::Ghost,
-                        size: ButtonSize::IconSm,
-                        title: "Close",
-                        onclick: move |_| on_close.call(()),
-                        Close { class: "h-5 w-5" }
+                    class: "flex items-center justify-between px-5 py-4",
+                    div {
+                        span { class: "block text-sm font-medium", "Channel view" }
+                        span {
+                            class: "block text-xs text-neutral-500",
+                            "How channels are laid out."
+                        }
+                    }
+                    div {
+                        class: "flex gap-1 rounded-lg bg-neutral-200 p-0.5 dark:bg-neutral-800",
+                        ViewButton {
+                            label: "Grid",
+                            view: ChannelView::Grid,
+                            current: settings.channel_view,
+                            on_set_view,
+                        }
+                        ViewButton {
+                            label: "List",
+                            view: ChannelView::List,
+                            current: settings.channel_view,
+                            on_set_view,
+                        }
+                        ViewButton {
+                            label: "Guide",
+                            view: ChannelView::Guide,
+                            current: settings.channel_view,
+                            on_set_view,
+                        }
                     }
                 }
-
+                ToggleRow {
+                    label: "Incognito",
+                    description: "Pause recording for this session only.",
+                    value: incognito,
+                    on_toggle: on_toggle_incognito,
+                }
                 div {
-                    class: "flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800",
-                    ToggleRow {
-                        label: "Favorites",
-                        description: "Show the star on channels and the Favorites tab.",
-                        value: settings.favorites_enabled,
-                        on_toggle: on_toggle_favorites,
-                    }
-                    ToggleRow {
-                        label: "Record watch history",
-                        description: "Keep a list of what you've played.",
-                        value: settings.history_enabled,
-                        on_toggle: on_toggle_history,
-                    }
-                    ToggleRow {
-                        label: "Program guide (EPG)",
-                        description: "Fetch and show Now / Next on channels.",
-                        value: settings.epg_enabled,
-                        on_toggle: on_toggle_epg,
-                    }
+                    class: "flex items-center justify-between px-5 py-4",
                     div {
-                        class: "flex items-center justify-between px-5 py-4",
-                        div {
-                            span { class: "block text-sm font-medium", "Channel view" }
-                            span {
-                                class: "block text-xs text-neutral-500",
-                                "How channels are laid out."
-                            }
-                        }
-                        div {
-                            class: "flex gap-1 rounded-lg bg-neutral-200 p-0.5 dark:bg-neutral-800",
-                            ViewButton {
-                                label: "Grid",
-                                view: ChannelView::Grid,
-                                current: settings.channel_view,
-                                on_set_view,
-                            }
-                            ViewButton {
-                                label: "List",
-                                view: ChannelView::List,
-                                current: settings.channel_view,
-                                on_set_view,
-                            }
-                            ViewButton {
-                                label: "Guide",
-                                view: ChannelView::Guide,
-                                current: settings.channel_view,
-                                on_set_view,
-                            }
+                        span { class: "block text-sm font-medium", "Watch history" }
+                        span {
+                            class: "block text-xs text-neutral-500",
+                            "Erase everything you've watched."
                         }
                     }
-                    ToggleRow {
-                        label: "Incognito",
-                        description: "Pause recording for this session only.",
-                        value: incognito,
-                        on_toggle: on_toggle_incognito,
-                    }
-                    div {
-                        class: "flex items-center justify-between px-5 py-4",
-                        div {
-                            span { class: "block text-sm font-medium", "Watch history" }
-                            span {
-                                class: "block text-xs text-neutral-500",
-                                "Erase everything you've watched."
-                            }
-                        }
-                        Button {
-                            variant: ButtonVariant::Destructive,
-                            size: ButtonSize::Sm,
-                            class: "shrink-0",
-                            onclick: move |_| on_clear_history.call(()),
-                            "Clear"
-                        }
+                    Button {
+                        variant: ButtonVariant::Destructive,
+                        size: ButtonSize::Sm,
+                        class: "shrink-0",
+                        onclick: move |_| on_clear_history.call(()),
+                        "Clear"
                     }
                 }
             }
