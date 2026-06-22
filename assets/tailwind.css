@@ -348,9 +348,6 @@
   .inline-flex {
     display: inline-flex;
   }
-  .h-1 {
-    height: calc(var(--spacing) * 1);
-  }
   .h-3\.5 {
     height: calc(var(--spacing) * 3.5);
   }
@@ -897,9 +894,6 @@
   .tabular-nums {
     --tw-numeric-spacing: tabular-nums;
     font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,) var(--tw-numeric-fraction,);
-  }
-  .accent-sky-500 {
-    accent-color: var(--color-sky-500);
   }
   .opacity-0 {
     opacity: 0%;
