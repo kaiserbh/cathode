@@ -23,6 +23,8 @@ pub fn ChannelPane(
     now: i64,
     on_play: EventHandler<Stream>,
     on_toggle_favorite: EventHandler<Stream>,
+    // Guide-only: open a programme's detail popover (programme, channel, click x/y).
+    on_programme: EventHandler<(Programme, Stream, f64, f64)>,
 ) -> Element {
     match view {
         ChannelView::Grid => rsx! {
@@ -53,6 +55,7 @@ pub fn ChannelPane(
                 to: guide_to,
                 now,
                 on_play,
+                on_programme,
             }
         },
     }
