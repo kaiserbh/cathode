@@ -8,6 +8,7 @@ use cathode_core::model::{LogLevel, LogLine};
 use dioxus::prelude::*;
 
 use crate::components::icons::{Close, Copy, Search, Trash};
+use crate::ui::select::{Select, SelectGroup, SelectOption};
 
 /// The id of the scroll container, used to keep it pinned to the newest line.
 const SCROLL_ID: &str = "cathode-log-scroll";
@@ -92,7 +93,8 @@ pub fn LogsPanel(
     on_clear: EventHandler<()>,
     on_close: EventHandler<()>,
 ) -> Element {
-    let current = level_value(level);
+    // Controlled selection for the level Select: a memo so it tracks the `level` prop.
+    let selected = use_memo(move || Some(level_value(level).to_string()));
     let mut query = use_signal(String::new);
 
     // Filter to the selected level and the search query.
@@ -133,17 +135,23 @@ pub fn LogsPanel(
                     class: "flex items-center gap-3 border-b border-neutral-200 px-5 py-3 \
                         dark:border-neutral-800",
                     h2 { class: "shrink-0 text-base font-semibold", "Logs" }
-                    label {
+                    div {
                         class: "flex shrink-0 items-center gap-2 text-sm text-neutral-500",
                         "Level"
-                        select {
-                            class: "rounded-md border border-neutral-300 bg-transparent px-2 py-1 \
-                                text-sm text-neutral-900 focus:outline-none focus:ring-2 \
-                                focus:ring-sky-400 dark:border-neutral-700 dark:text-neutral-100",
-                            value: current,
-                            onchange: move |e| on_set_level.call(level_from_value(&e.value())),
-                            for (_, name) in LEVELS.iter() {
-                                option { value: *name, {*name} }
+                        Select::<String> {
+                            value: Some(selected.into()),
+                            on_value_change: move |v: Option<String>| {
+                                on_set_level.call(level_from_value(v.as_deref().unwrap_or("Off")));
+                            },
+                            SelectGroup {
+                                for (i, (_, name)) in LEVELS.iter().enumerate() {
+                                    SelectOption::<String> {
+                                        index: i,
+                                        value: name.to_string(),
+                                        text_value: *name,
+                                        {*name}
+                                    }
+                                }
                             }
                         }
                     }
