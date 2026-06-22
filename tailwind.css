@@ -9,3 +9,39 @@ html,
 body {
     background: transparent;
 }
+
+/* Uniform scrollbars across platforms. The OS-native bars differ between WebView2
+   (Windows) and WKWebView (macOS); both are Chromium/WebKit and honour these rules on
+   inner overflow containers, which is what every scroll region in the app uses. Firefox
+   standard properties are included as a fallback. */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-neutral-400) transparent;
+}
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background-color: var(--color-neutral-400);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-neutral-500);
+}
+@media (prefers-color-scheme: dark) {
+    * {
+        scrollbar-color: var(--color-neutral-600) transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+        background-color: var(--color-neutral-600);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background-color: var(--color-neutral-500);
+    }
+}
