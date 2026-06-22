@@ -45,3 +45,46 @@ body {
         background-color: var(--color-neutral-500);
     }
 }
+
+/* The volume slider. A native range input styled identically on WebView2 (Windows)
+   and WKWebView (macOS) — both are WebKit, so the ::-webkit-slider-* rules drive the
+   look; the ::-moz-* rules are a fallback. Colours are pinned for the always-dark
+   player control bar (translucent-white track, sky thumb). */
+.cathode-range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 0.875rem;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+}
+.cathode-range::-webkit-slider-runnable-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.3);
+}
+.cathode-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -0.25rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    border: none;
+    border-radius: 9999px;
+    background: #38bdf8;
+}
+.cathode-range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.4);
+}
+.cathode-range::-moz-range-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.3);
+}
+.cathode-range::-moz-range-thumb {
+    width: 0.875rem;
+    height: 0.875rem;
+    border: none;
+    border-radius: 9999px;
+    background: #38bdf8;
+}

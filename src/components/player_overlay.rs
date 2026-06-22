@@ -11,8 +11,7 @@ use js_sys::Date;
 use crate::components::icons::{
     FullscreenEnter, FullscreenExit, Pause, Play, Stop, VolumeHigh, VolumeMuted,
 };
-use crate::format::{hhmm, volume_from_slider};
-use crate::ui::slider::Slider;
+use crate::format::hhmm;
 
 /// How long the pointer must be still before the controls hide, in milliseconds.
 const IDLE_MS: f64 = 2500.0;
@@ -213,26 +212,20 @@ pub fn PlayerOverlay(
                             VolumeHigh { class: ICON }
                         }
                     }
-                    // The control bar is always dark, so pin the slider colours here:
-                    // the default theme colours track the OS light/dark setting and would
-                    // make the range near-invisible on this scrim in light mode.
-                    div {
-                        class: "w-24",
-                        style: "--primary-color-5: rgba(255,255,255,0.25); \
-                            --secondary-color-2: #38bdf8; --primary-color-1: #fff;",
-                        Slider {
-                            // The vendored slider defaults to min-width:200px; override it so
-                            // it fits the w-24 wrapper instead of overflowing onto (and
-                            // stealing clicks from) the neighbouring controls.
-                            style: "min-width: 0; width: 100%;",
-                            value: Some(f64::from(volume)),
-                            min: 0.0,
-                            max: 100.0,
-                            step: 1.0,
-                            horizontal: true,
-                            label: Some("Volume".to_string()),
-                            on_value_change: move |v: f64| on_set_volume.call(volume_from_slider(v)),
-                        }
+                    // Native range input, fully styled via `.cathode-range` so it looks the
+                    // same on Windows and macOS without the primitives' global-pointer drag
+                    // machinery. mx-1 keeps it clear of the neighbouring controls.
+                    input {
+                        r#type: "range",
+                        min: "0",
+                        max: "100",
+                        value: "{volume}",
+                        class: "cathode-range mx-1 w-24",
+                        oninput: move |e| {
+                            if let Ok(v) = e.value().parse::<u8>() {
+                                on_set_volume.call(v);
+                            }
+                        },
                     }
                     button {
                         class: BTN,
