@@ -18,7 +18,6 @@ pub mod spinner;
 pub mod stream_grid;
 pub mod tab_bar;
 pub mod title_bar;
-pub mod toast;
 pub mod toggle;
 
 pub use category_list::CategoryList;
@@ -37,5 +36,4 @@ pub use spinner::Spinner;
 pub use stream_grid::StreamGrid;
 pub use tab_bar::{Tab, TabBar};
 pub use title_bar::TitleBar;
-pub use toast::Toast;
 pub use toggle::Toggle;
