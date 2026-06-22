@@ -46,7 +46,11 @@ pub fn ProgrammePopover(
                 style,
                 onclick: move |e| e.stop_propagation(),
                 div { class: "flex items-start gap-2",
-                    h3 { class: "min-w-0 flex-1 text-sm font-semibold", {programme.title.clone()} }
+                    h3 {
+                        class: "min-w-0 flex-1 text-sm font-semibold text-neutral-900 \
+                            dark:text-neutral-100",
+                        {programme.title.clone()}
+                    }
                     Button {
                         variant: ButtonVariant::Ghost,
                         size: ButtonSize::IconXs,
