@@ -7,6 +7,7 @@ use dioxus::prelude::*;
 
 use crate::components::Toggle;
 use crate::components::icons::Close;
+use crate::ui::button::{Button, ButtonSize, ButtonVariant};
 
 #[component]
 pub fn SettingsPanel(
@@ -33,9 +34,9 @@ pub fn SettingsPanel(
                     class: "flex items-center justify-between border-b border-neutral-200 \
                         px-5 py-4 dark:border-neutral-800",
                     h2 { class: "text-base font-semibold", "Options" }
-                    button {
-                        class: "rounded-full p-1.5 text-neutral-500 hover:bg-neutral-100 \
-                            dark:hover:bg-neutral-800",
+                    Button {
+                        variant: ButtonVariant::Ghost,
+                        size: ButtonSize::IconSm,
                         title: "Close",
                         onclick: move |_| on_close.call(()),
                         Close { class: "h-5 w-5" }
@@ -108,10 +109,10 @@ pub fn SettingsPanel(
                                 "Erase everything you've watched."
                             }
                         }
-                        button {
-                            class: "shrink-0 rounded-md border border-red-300 px-3 py-1.5 \
-                                text-sm font-medium text-red-700 hover:bg-red-50 \
-                                dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950",
+                        Button {
+                            variant: ButtonVariant::Destructive,
+                            size: ButtonSize::Sm,
+                            class: "shrink-0",
                             onclick: move |_| on_clear_history.call(()),
                             "Clear"
                         }

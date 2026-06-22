@@ -6,6 +6,7 @@ use dioxus::prelude::*;
 
 use crate::components::ConnectForm;
 use crate::components::icons::Close;
+use crate::ui::button::{Button, ButtonSize, ButtonVariant};
 
 /// A human label for a saved account: `username @ host` (scheme stripped).
 fn label(creds: &XtreamCredentials) -> String {
@@ -42,9 +43,9 @@ pub fn SourcesPanel(
                     class: "flex items-center justify-between border-b border-neutral-200 \
                         px-5 py-4 dark:border-neutral-800",
                     h2 { class: "text-base font-semibold", "Sources" }
-                    button {
-                        class: "rounded-full p-1.5 text-neutral-500 hover:bg-neutral-100 \
-                            dark:hover:bg-neutral-800",
+                    Button {
+                        variant: ButtonVariant::Ghost,
+                        size: ButtonSize::IconSm,
                         title: "Close",
                         onclick: move |_| on_close.call(()),
                         Close { class: "h-5 w-5" }
@@ -82,14 +83,14 @@ pub fn SourcesPanel(
                                             "{label(&source)}"
                                         }
                                         button {
-                                            class: "shrink-0 rounded-md px-3 py-2 text-sm \
+                                            class: "shrink-0 rounded-md px-3 py-2 \
                                                 text-neutral-400 hover:text-red-600",
                                             title: "Remove",
                                             onclick: move |e| {
                                                 e.stop_propagation();
                                                 on_forget.call(forget_source.clone());
                                             },
-                                            "✕"
+                                            Close { class: "h-4 w-4" }
                                         }
                                     }
                                 }
