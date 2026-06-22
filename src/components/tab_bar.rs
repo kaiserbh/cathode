@@ -1,13 +1,18 @@
 //! The top-level browse tabs: Live, Movies, Series, Favorites, History. The content
 //! tabs (Live/Movies/Series) are always shown; Favorites and History appear only when
 //! their features are enabled in settings.
+//!
+//! Built on the dioxus-primitives `Tabs`, driven (controlled) by the `Tab` enum that
+//! `Browse` owns — the tabs only render the bar; the content switch stays in `Browse`,
+//! so there's a single source of truth. The empty strip is a window drag region.
 
 use dioxus::prelude::*;
 
 use crate::components::icons::{Film, History, Series as SeriesIcon, Star, Tv};
+use crate::ui::tabs::{TabList, TabTrigger, Tabs};
 
 /// Which browse view is active.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tab {
     Live,
     Movies,
@@ -15,6 +20,29 @@ pub enum Tab {
     Favorites,
     History,
 }
+
+/// The stable string id for a tab (the primitives' tab value).
+fn tab_to_str(tab: Tab) -> &'static str {
+    match tab {
+        Tab::Live => "live",
+        Tab::Movies => "movies",
+        Tab::Series => "series",
+        Tab::Favorites => "favorites",
+        Tab::History => "history",
+    }
+}
+
+fn tab_from_str(value: &str) -> Tab {
+    match value {
+        "movies" => Tab::Movies,
+        "series" => Tab::Series,
+        "favorites" => Tab::Favorites,
+        "history" => Tab::History,
+        _ => Tab::Live,
+    }
+}
+
+const TRIGGER: &str = "inline-flex items-center gap-1.5";
 
 #[component]
 pub fn TabBar(
@@ -24,48 +52,58 @@ pub fn TabBar(
     on_select: EventHandler<Tab>,
 ) -> Element {
     rsx! {
-        nav {
-            class: "shrink-0 flex gap-1 border-b border-neutral-200 px-2 dark:border-neutral-800",
-            TabButton { label: "Live", tab: Tab::Live, active, on_select }
-            TabButton { label: "Movies", tab: Tab::Movies, active, on_select }
-            TabButton { label: "Series", tab: Tab::Series, active, on_select }
-            if show_favorites {
-                TabButton { label: "Favorites", tab: Tab::Favorites, active, on_select }
-            }
-            if show_history {
-                TabButton { label: "History", tab: Tab::History, active, on_select }
+        Tabs {
+            value: Some(tab_to_str(active).to_string()),
+            on_value_change: move |v: String| on_select.call(tab_from_str(&v)),
+            horizontal: true,
+            // The empty space in the tab strip drags the window (macOS); triggers are
+            // buttons, so they aren't drag targets.
+            TabList { "data-tauri-drag-region": "true",
+                TabTrigger { value: "live", index: 0usize, class: TRIGGER,
+                    Tv { class: "h-4 w-4" }
+                    "Live"
+                }
+                TabTrigger { value: "movies", index: 1usize, class: TRIGGER,
+                    Film { class: "h-4 w-4" }
+                    "Movies"
+                }
+                TabTrigger { value: "series", index: 2usize, class: TRIGGER,
+                    SeriesIcon { class: "h-4 w-4" }
+                    "Series"
+                }
+                if show_favorites {
+                    TabTrigger { value: "favorites", index: 3usize, class: TRIGGER,
+                        Star { class: "h-4 w-4", filled: true }
+                        "Favorites"
+                    }
+                }
+                if show_history {
+                    TabTrigger { value: "history", index: 4usize, class: TRIGGER,
+                        History { class: "h-4 w-4" }
+                        "History"
+                    }
+                }
             }
         }
     }
 }
 
-/// The icon for a tab.
-fn tab_icon(tab: Tab) -> Element {
-    let class = "h-4 w-4".to_string();
-    match tab {
-        Tab::Live => rsx! { Tv { class } },
-        Tab::Movies => rsx! { Film { class } },
-        Tab::Series => rsx! { SeriesIcon { class } },
-        Tab::Favorites => rsx! { Star { class, filled: true } },
-        Tab::History => rsx! { History { class } },
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[component]
-fn TabButton(label: String, tab: Tab, active: Tab, on_select: EventHandler<Tab>) -> Element {
-    let is_active = active == tab;
-    let state = if is_active {
-        "border-sky-500 text-sky-600 dark:text-sky-400"
-    } else {
-        "border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
-    };
-    rsx! {
-        button {
-            class: "flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium \
-                focus:outline-none {state}",
-            onclick: move |_| on_select.call(tab),
-            {tab_icon(tab)}
-            {label}
+    #[test]
+    fn tab_string_round_trips() {
+        for tab in [
+            Tab::Live,
+            Tab::Movies,
+            Tab::Series,
+            Tab::Favorites,
+            Tab::History,
+        ] {
+            assert_eq!(tab_from_str(tab_to_str(tab)), tab);
         }
+        // Unknown ids fall back to Live.
+        assert_eq!(tab_from_str("nope"), Tab::Live);
     }
 }
