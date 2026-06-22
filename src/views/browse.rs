@@ -22,8 +22,8 @@ use crate::bindings;
 use dioxus_primitives::toast::{ToastOptions, use_toast};
 
 use crate::components::{
-    CategoryList, ChannelPane, LogsPanel, PlayerOverlay, SearchResults, SeriesDetail,
-    SettingsPanel, SourcesPanel, Spinner, Tab, TabBar, TitleBar,
+    CategoryList, ChannelPane, LogsPanel, PlayerOverlay, ProgrammePopover, SearchResults,
+    SeriesDetail, SettingsPanel, SourcesPanel, Spinner, Tab, TabBar, TitleBar,
 };
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
@@ -75,6 +75,8 @@ pub fn Browse() -> Element {
     let mut tab = use_signal(|| Tab::Live);
     let mut epg = use_signal(HashMap::<String, NowNext>::new);
     let mut programmes = use_signal(HashMap::<String, Vec<Programme>>::new);
+    // The EPG cell whose detail popover is open: (programme, its channel, click x/y).
+    let mut programme_detail = use_signal(|| None::<(Programme, Stream, f64, f64)>);
     let mut guide_from = use_signal(|| 0i64);
     let mut guide_to = use_signal(|| 0i64);
     let mut fullscreen = use_signal(|| false);
@@ -636,6 +638,7 @@ pub fn Browse() -> Element {
                                             now: crate::format::now_unix(),
                                             on_play: move |s| on_play.call(s),
                                             on_toggle_favorite: move |s| toggle_favorite.call(s),
+                                            on_programme: move |d| programme_detail.set(Some(d)),
                                         }
                                     }
                                 }
@@ -663,6 +666,7 @@ pub fn Browse() -> Element {
                                     now: crate::format::now_unix(),
                                     on_play: move |s| on_play.call(s),
                                     on_toggle_favorite: move |s| toggle_favorite.call(s),
+                                    on_programme: move |d| programme_detail.set(Some(d)),
                                 }
                             }
                         }
@@ -688,6 +692,7 @@ pub fn Browse() -> Element {
                                     now: crate::format::now_unix(),
                                     on_play: move |s| on_play.call(s),
                                     on_toggle_favorite: move |s| toggle_favorite.call(s),
+                                    on_programme: move |d| programme_detail.set(Some(d)),
                                 }
                             }
                         }
@@ -833,6 +838,19 @@ pub fn Browse() -> Element {
                     search_query.set(String::new());
                     search_results.set(Vec::new());
                 },
+            }
+        }
+
+        if let Some((prog, stream, x, y)) = programme_detail() {
+            ProgrammePopover {
+                programme: prog,
+                x,
+                y,
+                on_play: move |_| {
+                    programme_detail.set(None);
+                    on_play.call(stream.clone());
+                },
+                on_close: move |_| programme_detail.set(None),
             }
         }
     }

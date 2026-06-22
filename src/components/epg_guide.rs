@@ -29,6 +29,9 @@ pub fn EpgGuide(
     to: i64,
     now: i64,
     on_play: EventHandler<Stream>,
+    /// Clicking a programme cell opens its detail popover: the programme, the channel
+    /// it's on, and the click's viewport coordinates to anchor the card.
+    on_programme: EventHandler<(Programme, Stream, f64, f64)>,
 ) -> Element {
     let timeline_w = px(to, from);
     let tick_count = ((to - from) / (TICK_MINUTES * 60)).max(0);
@@ -101,6 +104,7 @@ pub fn EpgGuide(
                                         let right = px(programme.stop, from).min(timeline_w);
                                         let width = (right - left).max(2.0);
                                         let block_stream = stream.clone();
+                                        let block_prog = programme.clone();
                                         rsx! {
                                             button {
                                                 key: "{programme.start}",
@@ -111,7 +115,15 @@ pub fn EpgGuide(
                                                     dark:border-neutral-700 dark:bg-neutral-800 \
                                                     dark:hover:bg-neutral-700",
                                                 style: "left: {left}px; width: {width}px",
-                                                onclick: move |_| on_play.call(block_stream.clone()),
+                                                onclick: move |e: MouseEvent| {
+                                                    let c = e.client_coordinates();
+                                                    on_programme.call((
+                                                        block_prog.clone(),
+                                                        block_stream.clone(),
+                                                        c.x,
+                                                        c.y,
+                                                    ));
+                                                },
                                                 span {
                                                     class: "block truncate text-xs font-medium",
                                                     "{programme.title}"
