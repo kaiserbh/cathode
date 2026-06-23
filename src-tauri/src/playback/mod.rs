@@ -69,8 +69,10 @@ impl Player {
         self.mpv.command("stop", &[]).map_err(|e| err("stop", e))
     }
 
-    /// Set the output volume (0–100). mpv keeps this across `loadfile`, so it
-    /// persists for the session once applied.
+    /// Set the output volume. `volume` is the already-tapered mpv gain (a linear
+    /// amplitude percentage), not the raw slider position — callers map the 0–100
+    /// slider through `cathode_core::model::settings::volume_to_mpv_gain` first.
+    /// mpv keeps this across `loadfile`, so it persists for the session once applied.
     pub fn set_volume(&self, volume: f64) -> Result<(), AppError> {
         self.mpv
             .set_property("volume", volume)

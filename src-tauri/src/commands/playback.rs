@@ -51,7 +51,7 @@ pub fn stop_playback(player: State<'_, Player>) -> Result<(), AppError> {
 
 #[tauri::command]
 pub fn set_volume(player: State<'_, Player>, volume: u8) -> Result<(), AppError> {
-    player.set_volume(volume.min(100) as f64)
+    player.set_volume(cathode_core::model::settings::volume_to_mpv_gain(volume))
 }
 
 #[tauri::command]

@@ -9,6 +9,16 @@ use serde::{Deserialize, Serialize};
 
 use super::LogLevel;
 
+/// Convert a user-facing volume slider position (0–100) into the linear
+/// amplitude gain mpv expects. mpv's `volume` is a linear multiplier on the
+/// audio samples, but loudness perception is non-linear, so a 1:1 mapping makes
+/// the low end feel almost silent. A square-root taper lifts the quiet end so
+/// equal slider steps feel more even. Endpoints are preserved: 0 → 0, 100 → 100.
+pub fn volume_to_mpv_gain(slider: u8) -> f64 {
+    let s = (slider.min(100) as f64) / 100.0;
+    s.sqrt() * 100.0
+}
+
 /// How the channel list is laid out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -59,6 +69,33 @@ impl Default for Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn volume_taper_preserves_endpoints() {
+        assert_eq!(volume_to_mpv_gain(0), 0.0);
+        assert_eq!(volume_to_mpv_gain(100), 100.0);
+        // Out-of-range clamps to full, never amplifies past unity.
+        assert_eq!(volume_to_mpv_gain(200), 100.0);
+    }
+
+    #[test]
+    fn volume_taper_boosts_the_low_end() {
+        // The whole point: equal-position low values get lifted well above their
+        // raw number so they are actually audible.
+        assert!((volume_to_mpv_gain(30) - 54.77).abs() < 0.01);
+        assert!(volume_to_mpv_gain(30) > 30.0);
+        assert!(volume_to_mpv_gain(15) > 15.0);
+    }
+
+    #[test]
+    fn volume_taper_is_monotonic() {
+        let mut prev = volume_to_mpv_gain(0);
+        for s in 1..=100u8 {
+            let g = volume_to_mpv_gain(s);
+            assert!(g > prev, "gain must increase: {s} gave {g} <= {prev}");
+            prev = g;
+        }
+    }
 
     #[test]
     fn defaults_are_on_and_grid() {
