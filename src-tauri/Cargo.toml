@@ -1,9 +1,11 @@
 [package]
 name = "cathode"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Cathode: a cross-platform IPTV player (Tauri shell)"
+authors = ["KaiserBh"]
 edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/kaiserbh/cathode"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
