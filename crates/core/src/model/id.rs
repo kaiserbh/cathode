@@ -2,7 +2,7 @@
 //!
 //! Favorites and history must survive a re-sync, so we never key on list
 //! position. Instead we derive an id by hashing the source id together with the
-//! most stable field a provider gives us. Per AGENTS.md the preferred key, in
+//! most stable field a provider gives us. The preferred key, in
 //! order, is the Xtream `stream_id`, then `tvg-id`, falling back to name + url
 //! for raw M3U. This module takes the already-chosen key; choosing it lives with
 //! each source parser.

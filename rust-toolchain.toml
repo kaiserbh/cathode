@@ -1,0 +1,8 @@
+[toolchain]
+# Pinned for reproducible builds. Must be >= 1.85 for edition 2024 (the root
+# `cathode-ui` crate). Bump deliberately.
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]
+# The Dioxus frontend compiles to WebAssembly; listing the target here means
+# `rustup` installs it automatically for contributors and CI.
+targets = ["wasm32-unknown-unknown"]

@@ -26,7 +26,7 @@ pub struct Stream {
     pub id: StreamId,
     /// The provider's native id (Xtream `stream_id`), kept so the source can
     /// resolve a playable URL. This is the one allowed surfacing of source
-    /// asymmetry (AGENTS.md); downstream code still never branches on source.
+    /// asymmetry; downstream code still never branches on source.
     pub provider_id: String,
     pub name: String,
     pub logo: Option<String>,

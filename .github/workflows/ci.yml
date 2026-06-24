@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref (a new push to a PR supersedes the old).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: CI only reads the repo.
+permissions:
+  contents: read
+
+jobs:
+  # Formatting is toolchain-only, so it runs fastest on Linux with no native deps.
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: false
+      # rust-toolchain.toml pins the channel + rustfmt; rustup honours it on first use.
+      - run: rustup show
+      - run: cargo fmt --all -- --check
+
+  # Enforce: `cathode-core` stays WASM-safe and the
+  # Dioxus frontend still compiles to wasm32. No native deps, no LFS.
+  wasm:
+    name: WASM / frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: false
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm
+      # `dx` (Dioxus CLI) bundles the frontend; pin to the version used locally.
+      # Built from source and cached, so later runs restore it instead of rebuilding.
+      - name: Install Dioxus CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: dioxus-cli
+          version: "0.7.9"
+      - name: Verify dx is on PATH
+        run: dx --version
+      - name: core builds for wasm32 (WASM-safety invariant)
+        run: cargo build -p cathode-core --target wasm32-unknown-unknown
+      - name: frontend compiles to WASM
+        run: dx build
+
+  # Lint + test on the platforms that have a working video surface. Linux is
+  # excluded (no surface yet); the `wasm` job covers the portable core there.
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Windows links the vendored libmpv import lib + ships its DLLs, both
+          # stored in Git LFS. Without this the build fails at LNK1181 (mpv.lib).
+          lfs: ${{ runner.os == 'Windows' }}
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+      # macOS resolves libmpv via Homebrew + pkg-config (see src-tauri/build.rs).
+      - name: Install mpv (macOS)
+        if: runner.os == 'macOS'
+        run: brew install mpv
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --all

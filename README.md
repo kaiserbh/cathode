@@ -1,39 +1,143 @@
 # Cathode
 
-## Platform setup for playback (libmpv)
+Cathode is a desktop IPTV player. Point it at an [Xtream Codes](https://en.wikipedia.org/wiki/Xtream_Codes) account and it pulls in your live channels, movies, and series, shows a programme guide, and plays streams with [mpv](https://mpv.io).
 
-Cathode links libmpv directly (the `libmpv2` crate). `libmpv2-sys` emits `-lmpv` without a
-search path, so each platform has to point the linker at its libmpv. `src-tauri/build.rs`
-handles this per-OS.
+[![CI](https://github.com/kaiserbh/cathode/actions/workflows/ci.yml/badge.svg)](https://github.com/kaiserbh/cathode/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/kaiserbh/cathode?include_prereleases&sort=semver)](https://github.com/kaiserbh/cathode/releases)
+[![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](./LICENSE)
 
-### macOS
+It's written entirely in Rust:
+
+- A [Tauri](https://tauri.app) v2 shell holds the window, app state, the SQLite cache, the HTTP client, and the mpv video surface.
+- A [Dioxus](https://dioxuslabs.com) 0.7 frontend (Rust compiled to WebAssembly) renders the UI in the webview.
+- A `cathode-core` crate holds the domain model and all the parsing and normalization. It stays WASM-safe so both the shell and the frontend can depend on it.
+- Playback links libmpv directly and drives it through mpv's render API, with no spawned processes and no `--wid` embedding.
+
+Because it's Rust on both sides, the same `Stream`, `Category`, and `Programme` types go straight from the backend into the UI. There's no serialization boundary and no duplicated model definitions.
+
+## Platform support
+
+Windows x64 and macOS (Apple Silicon and Intel) work today. Linux isn't there yet: the core and UI compile, but there's no native video surface, so video won't render. See the [roadmap](#roadmap).
+
+| Platform | Notes |
+| --- | --- |
+| Windows x64 | libmpv and ANGLE are vendored in the repo (Git LFS), so there's no extra setup. |
+| macOS (Apple Silicon / Intel) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. |
+| Linux | Not yet. It compiles, but there's no video surface. |
+
+The released binaries aren't code-signed yet, so macOS warns through Gatekeeper and Windows through SmartScreen. The [install](#install) section explains how to get past that.
+
+## Features
+
+- Xtream Codes accounts: live TV, movies, and series with seasons and episodes. You can save several accounts (with a recently-used list), and there's an incognito mode that doesn't keep history. Plain M3U/M3U8 playlists aren't supported yet (see the [roadmap](#roadmap)).
+- Programme guide (EPG): an XMLTV parser feeds a now/next view and a scrollable timeline, cached in SQLite. The guide grid is virtualized, and clicking a programme opens a detail popover.
+- Playback through libmpv's render API: play, pause, resume, stop, volume, mute, fullscreen, and hardware decoding (`hwdec=auto-safe`). Video draws on a native GL surface behind the transparent webview (an `NSOpenGLView` on macOS, an ANGLE EGL/Direct3D 11 surface on Windows), with a small playback HUD.
+- Local catalog: SQLite caches categories, streams, and programmes. Favorites and watch history use stable IDs (an xxhash3 of the source plus the provider's own id) so they survive a re-sync and don't break when a provider reorders its list.
+- UI built with Dioxus, the [dioxus-primitives](https://github.com/DioxusLabs/components) components, and [Lucide](https://lucide.dev) icons: tabs for Live, Movies, Series, Favorites, and History, plus search, series drill-down, a settings panel, and a logs panel whose level you can change at runtime.
+
+## How it works
+
+```mermaid
+flowchart TD
+    UI["Dioxus frontend (WASM)<br/>components + views"]
+    B["src/bindings.rs<br/>typed invoke wrappers"]
+    CMD["src-tauri/src/commands<br/>#[tauri::command] handlers"]
+    CORE["cathode-core<br/>pure, WASM-safe domain logic<br/>model · sources · epg · catalog"]
+    NATIVE["src-tauri native I/O<br/>SQLite · reqwest · libmpv surface"]
+
+    UI -->|"calls only via"| B
+    B -->|"invoke"| CMD
+    CMD --> CORE
+    CMD --> NATIVE
+    UI -. "shares the same Rust types" .-> CORE
+```
+
+`cathode-core` is pure and deterministic. Parsing, normalization, stable-id derivation, EPG matching, and Xtream URL building all live there, with no global state and no hidden I/O, so its tests run in milliseconds and the crate keeps compiling to `wasm32-unknown-unknown`. Network and disk access are passed in behind traits.
+
+There's one normalized model. Every source produces the same `Stream`, `Category`, and `Programme`, and the UI uses those types directly, so nothing downstream cares which source a record came from. The shell stays thin: the `#[tauri::command]` handlers in `src-tauri/src/commands/` validate input, call into the core, and own the native parts (SQLite via rusqlite, HTTP via reqwest, the mpv surface). The UI only ever reaches the backend through the typed wrappers in [`src/bindings.rs`](./src/bindings.rs), never a raw `invoke`.
+
+## Install
+
+Download the latest build from the [releases page](https://github.com/kaiserbh/cathode/releases).
+
+- Windows: run the `.msi` (or the NSIS `.exe`). If SmartScreen warns, choose "More info", then "Run anyway".
+- macOS: install mpv first with `brew install mpv`, then open the `.dmg`. If Gatekeeper blocks it on first launch, right-click the app and choose Open, or run `xattr -dr com.apple.quarantine /Applications/Cathode.app`. Pick the Apple Silicon or Intel build for your Mac.
+
+## Building from source
+
+You'll need:
+
+- Rust 1.85 or newer. The toolchain is pinned in [`rust-toolchain.toml`](./rust-toolchain.toml), so rustup installs the right version and the `wasm32-unknown-unknown` target for you.
+- The Dioxus CLI: `cargo install dioxus-cli@0.7.9` (or `cargo binstall dioxus-cli@0.7.9`).
+- Git LFS, for the vendored Windows libmpv DLLs.
+
+### libmpv per platform
+
+Cathode links libmpv directly through the `libmpv2` crate. `libmpv2-sys` emits `-lmpv` without a search path, so each platform has to point the linker at its own libmpv; `src-tauri/build.rs` does this per OS.
+
+On macOS:
 
 ```sh
 brew install mpv
 ```
 
-`libmpv2-sys` finds it via pkg-config and the build script adds the Homebrew lib dir to the
-linker search path. Nothing else is needed.
+`libmpv2-sys` finds it through pkg-config, and the build script adds the Homebrew lib directory to the linker search path. That's all you need.
 
-### Windows (x64)
-
-libmpv and ANGLE are **vendored** in this repo under `src-tauri/vendor/mpv/windows-x64/` —
-the 112 MB `libmpv-2.dll` is stored via [Git LFS](https://git-lfs.com/), alongside a
-generated `mpv.lib` import library and ANGLE's `libEGL.dll` / `libGLESv2.dll`. So the only
-prerequisite is Git LFS:
+On Windows (x64), libmpv and ANGLE are vendored under `src-tauri/vendor/mpv/windows-x64/`: the 112 MB `libmpv-2.dll` through Git LFS, a generated `mpv.lib` import library, and ANGLE's `libEGL.dll` and `libGLESv2.dll`. So the only thing you need is Git LFS:
 
 ```sh
-git lfs install          # one-time, per machine
-git clone <repo>         # pulls the DLLs automatically
-# (already cloned without LFS? run `git lfs pull`)
+git lfs install   # once per machine
+git clone https://github.com/kaiserbh/cathode
+# already cloned without LFS? run: git lfs pull
 ```
 
-`src-tauri/build.rs` points the linker at the vendored `mpv.lib` and copies the runtime DLLs
-next to the built binaries, so `cargo tauri dev` / `cargo build` work with no further setup.
-If you see `LINK : fatal error LNK1181: cannot open input file 'mpv.lib'`, the LFS files
-were not fetched — run `git lfs pull`.
+`build.rs` points the linker at the vendored `mpv.lib` and copies the runtime DLLs next to the built binaries. If you see `LINK : fatal error LNK1181: cannot open input file 'mpv.lib'`, the LFS files weren't fetched, so run `git lfs pull`.
 
-Video renders via the libmpv OpenGL render API on an ANGLE (EGL → Direct3D 11) context. The
-surface is a separate top-level window glued directly behind the transparent Tauri window
-(`src-tauri/src/playback/windows.rs`); rendering runs on a dedicated thread so the UI stays
-responsive.
+On Linux it compiles, but video won't render yet because there's no native surface. See the [roadmap](#roadmap).
+
+### Common commands
+
+| Action | Command |
+| --- | --- |
+| Run the app (dev) | `cargo tauri dev` |
+| Build release bundles | `cargo tauri build` |
+| Frontend hot-reload (UI only) | `dx serve` |
+| Build the frontend to WASM | `dx build` |
+| Format / lint / test | `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --all` |
+
+## Roadmap
+
+Roughly in order of priority. Contributions to any of these are welcome.
+
+- Plain M3U/M3U8 playlists: load a playlist by URL or file, with no Xtream account required (`cathode-core::sources::m3u`, deriving stable IDs from `tvg-id` or name plus url).
+- Linux support: a native video surface (X11/Wayland through the libmpv render API), then Linux in the release matrix.
+- Bundle libmpv into the macOS `.app` so `brew install mpv` is no longer required.
+- Code signing and notarization (Apple notarization, Windows Authenticode) so releases launch without warnings.
+- Quality-of-life work: better search and filtering, keyboard shortcuts, resume-from-position, a configurable default volume and `hwdec`, and theming.
+- More EPG: catch-up/archive, reminders, and channel logos.
+- Maybe later: an in-app updater, Windows ARM64, and Linux Flatpak/AppImage packaging.
+
+## Contributing
+
+Pull requests are welcome. A few things worth knowing:
+
+- A handful of rules keep the codebase tidy: write the test first, put new domain logic in `cathode-core` (and keep it WASM-safe, so no native-only dependencies), and have the UI reach the backend only through `src/bindings.rs`.
+- The project uses [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `feat(epg): ...`). Releases are automated with release-please, and a PR's title becomes the squash commit that decides the next version, so keep the title conventional.
+- Before opening a PR, check that `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all` pass, plus `dx build` if you changed the frontend.
+
+### Releasing
+
+Releases come straight from the commit history:
+
+1. When commits land on `main`, release-please opens (and keeps updating) a "chore: release X.Y.Z" PR that bumps the version everywhere and updates `CHANGELOG.md`.
+2. Merging that PR tags `vX.Y.Z` and publishes a GitHub release, which kicks off [`release-build.yml`](./.github/workflows/release-build.yml) to build and upload the macOS and Windows bundles.
+
+This needs two one-time repo secrets, `APP_ID` and `APP_PRIVATE_KEY`, for a GitHub App with `contents:write` and `pull_requests:write`. A release created by the default `GITHUB_TOKEN` won't trigger the build workflow, which is why the App is needed.
+
+## License
+
+[GPL-3.0-or-later](./LICENSE). Cathode links libmpv and ships it on Windows, so GPL-3.0 keeps the distributed binaries license-compatible.
+
+## Acknowledgements
+
+Built on mpv/libmpv, Tauri, Dioxus, dioxus-primitives, and Lucide.
