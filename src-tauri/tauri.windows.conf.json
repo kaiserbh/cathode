@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "vendor/mpv/windows-x64/libmpv-2.dll": "libmpv-2.dll",
+      "vendor/mpv/windows-x64/libEGL.dll": "libEGL.dll",
+      "vendor/mpv/windows-x64/libGLESv2.dll": "libGLESv2.dll"
+    }
+  }
+}
