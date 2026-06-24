@@ -21,7 +21,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           lfs: false
       # rust-toolchain.toml pins the channel + rustfmt; rustup honours it on first use.
@@ -34,7 +34,7 @@ jobs:
     name: WASM / frontend build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           lfs: false
       - run: rustup show
@@ -65,7 +65,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Windows links the vendored libmpv import lib + ships its DLLs, both
           # stored in Git LFS. Without this the build fails at LNK1181 (mpv.lib).
