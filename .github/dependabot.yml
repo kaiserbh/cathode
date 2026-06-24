@@ -9,6 +9,14 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: build
+    # quick-xml 0.38 reworked text handling (entities now arrive as separate
+    # Event::GeneralRef events); the EPG parser needs migrating first. Remove
+    # this once that migration lands so we can take 0.38+.
+    ignore:
+      - dependency-name: "quick-xml"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
