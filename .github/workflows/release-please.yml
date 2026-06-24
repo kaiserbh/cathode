@@ -21,7 +21,7 @@ jobs:
       # Release it publishes can trigger the downstream `release-build.yml`
       # workflow. Releases created by GITHUB_TOKEN do NOT trigger other workflows.
       # Requires repo secrets APP_ID and APP_PRIVATE_KEY (see README "Releasing").
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.APP_ID }}
