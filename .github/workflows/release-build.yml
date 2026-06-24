@@ -1,0 +1,60 @@
+name: Release Build
+
+# Fires when release-please publishes a Release (under the GitHub App identity).
+# Builds the platform bundles and uploads them to that same Release.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+# Never cancel an in-flight publish.
+concurrency:
+  group: release-build-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, arch: arm64, target: aarch64-apple-darwin, args: "--target aarch64-apple-darwin" }
+          - { os: macos-13, arch: x64, target: x86_64-apple-darwin, args: "--target x86_64-apple-darwin" }
+          - { os: windows-latest, arch: x64, target: "", args: "" }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Build the exact tagged commit the release points at.
+          ref: ${{ github.event.release.tag_name }}
+          # Windows needs the LFS-stored libmpv import lib + runtime DLLs.
+          lfs: ${{ runner.os == 'Windows' }}
+
+      - run: rustup show
+      - name: Add Rust target (macOS)
+        if: runner.os == 'macOS'
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}-${{ matrix.arch }}-release
+
+      - name: Install mpv (macOS)
+        if: runner.os == 'macOS'
+        run: brew install mpv
+
+      - uses: cargo-bin/cargo-binstall@main
+      # `dx` is invoked by tauri's beforeBuildCommand (`dx bundle --release`);
+      # `tauri-cli` provides `cargo tauri` for the Rust-only project.
+      - run: cargo binstall --no-confirm dioxus-cli@0.7.9 tauri-cli@^2
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Upload bundles to the existing Release rather than creating a new one.
+          releaseId: ${{ github.event.release.id }}
+          args: ${{ matrix.args }}
