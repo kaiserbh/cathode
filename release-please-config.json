@@ -1,8 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "rust",
-  "include-component-in-tag": false,
-  "separate-pull-requests": false,
+  "release-type": "simple",
   "pull-request-title-pattern": "chore: release ${version}",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
@@ -10,6 +8,9 @@
     ".": {
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
+        "Cargo.toml",
+        "src-tauri/Cargo.toml",
+        "crates/core/Cargo.toml",
         {
           "type": "json",
           "path": "src-tauri/tauri.conf.json",
