@@ -77,6 +77,11 @@ jobs:
       # macOS resolves libmpv via Homebrew + pkg-config (see src-tauri/build.rs).
       - name: Install mpv (macOS)
         if: runner.os == 'macOS'
-        run: brew install mpv
+        run: |
+          # GitHub's macOS runners preinstall third-party taps (aws/tap,
+          # azure/bicep) we don't use; drop them so Homebrew doesn't warn about
+          # untrusted taps. mpv comes from the trusted core tap.
+          brew untap aws/tap azure/bicep 2>/dev/null || true
+          brew install mpv
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo test --all
