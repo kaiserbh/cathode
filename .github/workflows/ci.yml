@@ -21,7 +21,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: false
       # rust-toolchain.toml pins the channel + rustfmt; rustup honours it on first use.
@@ -34,16 +34,22 @@ jobs:
     name: WASM / frontend build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: false
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
         with:
           key: wasm
-      - uses: cargo-bin/cargo-binstall@main
       # `dx` (Dioxus CLI) bundles the frontend; pin to the version used locally.
-      - run: cargo binstall --no-confirm dioxus-cli@0.7.9
+      # Built from source and cached, so later runs restore it instead of rebuilding.
+      - name: Install Dioxus CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: dioxus-cli
+          version: "0.7.9"
+      - name: Verify dx is on PATH
+        run: dx --version
       - name: core builds for wasm32 (WASM-safety invariant)
         run: cargo build -p cathode-core --target wasm32-unknown-unknown
       - name: frontend compiles to WASM
@@ -59,7 +65,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Windows links the vendored libmpv import lib + ships its DLLs, both
           # stored in Git LFS. Without this the build fails at LNK1181 (mpv.lib).

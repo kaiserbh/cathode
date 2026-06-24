@@ -26,7 +26,7 @@ jobs:
           - { os: macos-13, arch: x64, target: x86_64-apple-darwin, args: "--target x86_64-apple-darwin" }
           - { os: windows-latest, arch: x64, target: "", args: "" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Build the exact tagged commit the release points at.
           ref: ${{ github.event.release.tag_name }}
@@ -46,10 +46,19 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install mpv
 
-      - uses: cargo-bin/cargo-binstall@main
       # `dx` is invoked by tauri's beforeBuildCommand (`dx bundle --release`);
-      # `tauri-cli` provides `cargo tauri` for the Rust-only project.
-      - run: cargo binstall --no-confirm dioxus-cli@0.7.9 tauri-cli@^2
+      # `tauri-cli` provides `cargo tauri` for the Rust-only project. Both are
+      # built from source and cached, so later runs restore them.
+      - name: Install Dioxus CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: dioxus-cli
+          version: "0.7.9"
+      - name: Install Tauri CLI
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: tauri-cli
+          version: "^2"
 
       - uses: tauri-apps/tauri-action@v0
         env:
