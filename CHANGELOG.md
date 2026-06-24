@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/kaiserbh/cathode/compare/v0.5.0...v0.5.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* bundle libmpv runtime DLLs in the Windows installer ([dcf87c9](https://github.com/kaiserbh/cathode/commit/dcf87c931be2e6ce0718b09a6d3e255742d5d9cf))
+
 ## [0.5.0](https://github.com/kaiserbh/cathode/compare/v0.1.0...v0.5.0) (2026-06-24)
 
 
