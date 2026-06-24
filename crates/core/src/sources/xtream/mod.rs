@@ -106,7 +106,7 @@ impl XtreamSource {
     }
 
     /// Build the playable URL for a live stream. This is the one place a source's
-    /// identity is allowed to surface (AGENTS.md): Xtream uses a path-style URL.
+    /// identity is allowed to surface: Xtream uses a path-style URL.
     pub fn live_stream_url(&self, stream_id: &str, ext: &str) -> String {
         format!(
             "{}/live/{}/{}/{}.{}",
