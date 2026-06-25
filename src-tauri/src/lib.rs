@@ -98,6 +98,18 @@ pub fn run() {
                         }
                         None => tracing::error!("no main window to attach video surface"),
                     }
+
+                    // Linux: a GtkGLArea behind the transparent WebKitGTK webview, fed by
+                    // mpv's render API (EGL on Wayland, GLX on X11 — GtkGLArea picks one).
+                    #[cfg(target_os = "linux")]
+                    match app.get_webview_window("main") {
+                        Some(window) => {
+                            if let Err(e) = playback::linux::attach(&window, mpv) {
+                                tracing::error!("failed to attach video surface: {}", e.message);
+                            }
+                        }
+                        None => tracing::error!("no main window to attach video surface"),
+                    }
                 }
                 Err(e) => tracing::error!("failed to initialize player: {}", e.message),
             }
