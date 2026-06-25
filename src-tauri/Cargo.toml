@@ -72,6 +72,24 @@ windows = { version = "0.62", features = [
 # feature pulls in libloading internally).
 khronos-egl = { version = "6", features = ["dynamic"] }
 
+# Linux: own a GtkGLArea behind the WebKitGTK webview for the mpv surface. Tauri
+# is GTK3 + WebKitGTK here; `gtk`/`glib` are pinned to the versions tauri already
+# pulls so the reparented widgets share one type. One path covers Wayland (EGL)
+# and X11 (GLX) because GtkGLArea selects the GL backend itself.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+glib = "0.18"
+# Wake the GTK main loop (queue_render) from mpv's update callback, which fires on
+# an arbitrary thread. `MainContext::channel` is deprecated in glib 0.18, so we use
+# an async channel driven by `glib::spawn_future_local`.
+async-channel = "2"
+# dlopen libepoxy.so.0 (GTK's GL loader) to resolve GL symbols for the mpv render
+# get_proc_address resolver and the framebuffer query.
+libloading = "0.8"
+# setlocale(LC_NUMERIC, "C") before mpv_create — GTK sets the user locale during
+# init, which makes libmpv's mpv_create() return NULL.
+libc = "0.2"
+
 [dev-dependencies]
 wiremock = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

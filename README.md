@@ -17,13 +17,13 @@ Because it's Rust on both sides, the same `Stream`, `Category`, and `Programme` 
 
 ## Platform support
 
-Windows x64 and macOS (Apple Silicon and Intel) work today. Linux isn't there yet: the core and UI compile, but there's no native video surface, so video won't render. See the [roadmap](#roadmap).
+Windows x64, macOS (Apple Silicon and Intel), and Linux (Wayland and X11).
 
 | Platform | Notes |
 | --- | --- |
 | Windows x64 | libmpv and ANGLE are vendored in the repo (Git LFS), so there's no extra setup. |
 | macOS (Apple Silicon / Intel) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. |
-| Linux | Not yet. It compiles, but there's no video surface. |
+| Linux (Wayland / X11) | Uses the distro's libmpv. Install the system libraries first: `mpv`/`libmpv`, `libepoxy`, GTK 3, and WebKitGTK (for example `sudo pacman -S mpv libepoxy gtk3 webkit2gtk-4.1` on Arch, or `sudo apt install libmpv-dev libepoxy-dev libgtk-3-dev libwebkit2gtk-4.1-dev` on Debian/Ubuntu). |
 
 The released binaries aren't code-signed yet, so macOS warns through Gatekeeper and Windows through SmartScreen. The [install](#install) section explains how to get past that.
 
@@ -31,7 +31,7 @@ The released binaries aren't code-signed yet, so macOS warns through Gatekeeper 
 
 - Xtream Codes accounts: live TV, movies, and series with seasons and episodes. You can save several accounts (with a recently-used list), and there's an incognito mode that doesn't keep history. Plain M3U/M3U8 playlists aren't supported yet (see the [roadmap](#roadmap)).
 - Programme guide (EPG): an XMLTV parser feeds a now/next view and a scrollable timeline, cached in SQLite. The guide grid is virtualized, and clicking a programme opens a detail popover.
-- Playback through libmpv's render API: play, pause, resume, stop, volume, mute, fullscreen, and hardware decoding (`hwdec=auto-safe`). Video draws on a native GL surface behind the transparent webview (an `NSOpenGLView` on macOS, an ANGLE EGL/Direct3D 11 surface on Windows), with a small playback HUD.
+- Playback through libmpv's render API: play, pause, resume, stop, volume, mute, fullscreen, and hardware decoding (`hwdec=auto-safe`). Video draws on a native GL surface behind the transparent webview (an `NSOpenGLView` on macOS, an ANGLE EGL/Direct3D 11 surface on Windows, a `GtkGLArea` on Linux), with a small playback HUD.
 - Local catalog: SQLite caches categories, streams, and programmes. Favorites and watch history use stable IDs (an xxhash3 of the source plus the provider's own id) so they survive a re-sync and don't break when a provider reorders its list.
 - UI built with Dioxus, the [dioxus-primitives](https://github.com/DioxusLabs/components) components, and [Lucide](https://lucide.dev) icons: tabs for Live, Movies, Series, Favorites, and History, plus search, series drill-down, a settings panel, and a logs panel whose level you can change at runtime.
 
@@ -93,7 +93,7 @@ git clone https://github.com/kaiserbh/cathode
 
 `build.rs` points the linker at the vendored `mpv.lib` and copies the runtime DLLs next to the built binaries. If you see `LINK : fatal error LNK1181: cannot open input file 'mpv.lib'`, the LFS files weren't fetched, so run `git lfs pull`.
 
-On Linux it compiles, but video won't render yet because there's no native surface. See the [roadmap](#roadmap).
+On Linux, install the system libraries listed under [Platform support](#platform-support) (libmpv, libepoxy, GTK 3, WebKitGTK) before building; there's nothing vendored.
 
 ### Common commands
 
@@ -110,7 +110,7 @@ On Linux it compiles, but video won't render yet because there's no native surfa
 Roughly in order of priority. Contributions to any of these are welcome.
 
 - Plain M3U/M3U8 playlists: load a playlist by URL or file, with no Xtream account required (`cathode-core::sources::m3u`, deriving stable IDs from `tvg-id` or name plus url).
-- Linux support: a native video surface (X11/Wayland through the libmpv render API), then Linux in the release matrix.
+- Linux in the release matrix. Playback already works on Wayland and X11 via a `GtkGLArea` surface; packaging (Flatpak/AppImage) is the remaining piece.
 - Bundle libmpv into the macOS `.app` so `brew install mpv` is no longer required.
 - Code signing and notarization (Apple notarization, Windows Authenticode) so releases launch without warnings.
 - Quality-of-life work: better search and filtering, keyboard shortcuts, resume-from-position, a configurable default volume and `hwdec`, and theming.
