@@ -17,12 +17,12 @@ Because it's Rust on both sides, the same `Stream`, `Category`, and `Programme` 
 
 ## Platform support
 
-Windows x64, macOS (Apple Silicon and Intel), and Linux (Wayland and X11).
+Windows x64, macOS (Apple Silicon), and Linux (Wayland and X11).
 
 | Platform | Notes |
 | --- | --- |
 | Windows x64 | libmpv and ANGLE are vendored in the repo (Git LFS), so there's no extra setup. |
-| macOS (Apple Silicon / Intel) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. |
+| macOS (Apple Silicon) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. Intel Macs aren't shipped as binaries (GitHub retired the Intel runner); build from source. |
 | Linux (Wayland / X11) | Released as an **AppImage** and a **.deb**, both built against the distro's libmpv. The AppImage targets recent distributions (glibc 2.39+, e.g. Ubuntu 24.04 / current rolling releases). Arch users build from source (see [Install](#install)). |
 
 The released binaries aren't code-signed yet, so macOS warns through Gatekeeper and Windows through SmartScreen. The [install](#install) section explains how to get past that.
@@ -61,7 +61,7 @@ There's one normalized model. Every source produces the same `Stream`, `Category
 Download the latest build from the [releases page](https://github.com/kaiserbh/cathode/releases).
 
 - Windows: run the `.msi` (or the NSIS `.exe`). If SmartScreen warns, choose "More info", then "Run anyway".
-- macOS: install mpv first with `brew install mpv`, then open the `.dmg`. If Gatekeeper blocks it on first launch, right-click the app and choose Open, or run `xattr -dr com.apple.quarantine /Applications/Cathode.app`. Pick the Apple Silicon or Intel build for your Mac.
+- macOS (Apple Silicon): install mpv first with `brew install mpv`, then open the `.dmg`. If Gatekeeper blocks it on first launch, right-click the app and choose Open, or run `xattr -dr com.apple.quarantine /Applications/Cathode.app`. Intel Macs aren't published as binaries; build from source.
 - Linux: download the `.AppImage` (`chmod +x` it and run), or the `.deb` (`sudo apt install ./Cathode_*.deb`). Both need the system libmpv at runtime; on Debian/Ubuntu the `.deb` pulls it in, and for the AppImage install `mpv` (or `libmpv2`) yourself. The AppImage targets recent distributions (glibc 2.39+).
 
 ### Arch Linux
