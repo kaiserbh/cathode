@@ -25,6 +25,9 @@ jobs:
           - { os: macos-latest, arch: arm64, target: aarch64-apple-darwin, args: "--target aarch64-apple-darwin" }
           - { os: macos-13, arch: x64, target: x86_64-apple-darwin, args: "--target x86_64-apple-darwin" }
           - { os: windows-latest, arch: x64, target: "", args: "" }
+          # ubuntu-24.04 ships libmpv.so.2 (mpv 0.37), which the `libmpv2` crate
+          # links against; 22.04's libmpv.so.1 (mpv 0.34) would fail to link.
+          - { os: ubuntu-24.04, arch: x64, target: "", args: "" }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,6 +54,17 @@ jobs:
           brew untap aws/tap azure/bicep 2>/dev/null || true
           brew install mpv
 
+      # Linux links the system libmpv (libmpv-dev) and builds against GTK3 +
+      # WebKitGTK; patchelf/librsvg are needed by the AppImage bundler.
+      - name: Install Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev patchelf \
+            libmpv-dev libssl-dev pkg-config
+
       # `dx` is invoked by tauri's beforeBuildCommand (`dx bundle --release`);
       # `tauri-cli` provides `cargo tauri` for the Rust-only project. Both are
       # built from source and cached, so later runs restore them.
@@ -68,6 +82,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Build the AppImage without FUSE on the runner (appimagetool runs by
+          # self-extracting instead of mounting). Harmless on macOS/Windows.
+          APPIMAGE_EXTRACT_AND_RUN: 1
         with:
           # Upload bundles to the existing Release rather than creating a new one.
           releaseId: ${{ github.event.release.id }}
