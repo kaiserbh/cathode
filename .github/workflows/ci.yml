@@ -15,6 +15,13 @@ concurrency:
 permissions:
   contents: read
 
+# Make cargo resilient to transient crates.io / git network failures in CI
+# (e.g. "[16] Error in the HTTP2 framing layer"). Retries cost nothing on success;
+# the git CLI is more reliable than libgit2 for the dioxus-primitives git dep.
+env:
+  CARGO_NET_RETRY: "10"
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
 jobs:
   # Formatting is toolchain-only, so it runs fastest on Linux with no native deps.
   fmt:
