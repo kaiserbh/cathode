@@ -34,7 +34,8 @@ jobs:
       # (creating the package on first push). It only parses metadata via
       # `makepkg --printsrcinfo`; it never runs prepare()/build().
       - name: Publish cathode to the AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4
+        # Pinned to a full tag; this action has no floating major (`@v4`) ref.
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
         with:
           pkgname: cathode
           pkgbuild: ./packaging/arch/PKGBUILD
