@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/kaiserbh/cathode/compare/v0.5.1...v0.5.2) (2026-06-25)
+
+
+### Features
+
+* linux backend ([#19](https://github.com/kaiserbh/cathode/issues/19)) ([f198fec](https://github.com/kaiserbh/cathode/commit/f198fecc130f07172b5de51bbee537db086c008a))
+
 ## [0.5.1](https://github.com/kaiserbh/cathode/compare/v0.5.0...v0.5.1) (2026-06-24)
 
 
