@@ -66,13 +66,19 @@ Download the latest build from the [releases page](https://github.com/kaiserbh/c
 
 ### Arch Linux
 
-Arch isn't covered by the release artifacts, so build from source. The one-liner installs the dependencies, builds, and installs Cathode plus a launcher entry:
+Arch isn't covered by the release binaries, so Cathode is built from source. The package is on the AUR; install it with an AUR helper, which resolves the build dependencies (including `tauri-cli`) for you:
+
+```sh
+paru -S cathode   # or: yay -S cathode
+```
+
+No AUR helper? The one-liner installs the dependencies, builds, and installs Cathode plus a launcher entry:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kaiserbh/cathode/main/scripts/install-arch.sh | sh
 ```
 
-Prefer a real package? Build with `makepkg` from the checked-in [PKGBUILD](./packaging/arch/PKGBUILD):
+Or build the checked-in [PKGBUILD](./packaging/arch/PKGBUILD) directly with `makepkg` (no AUR helper needed; it builds its own pinned `tauri-cli`):
 
 ```sh
 git clone https://github.com/kaiserbh/cathode
@@ -148,9 +154,9 @@ Pull requests are welcome. A few things worth knowing:
 Releases come straight from the commit history:
 
 1. When commits land on `main`, release-please opens (and keeps updating) a "chore: release X.Y.Z" PR that bumps the version everywhere and updates `CHANGELOG.md`.
-2. Merging that PR tags `vX.Y.Z` and publishes a GitHub release, which kicks off [`release-build.yml`](./.github/workflows/release-build.yml) to build and upload the macOS, Windows, and Linux (AppImage + `.deb`) bundles.
+2. Merging that PR tags `vX.Y.Z` and publishes a GitHub release, which kicks off [`release-build.yml`](./.github/workflows/release-build.yml) to build and upload the macOS, Windows, and Linux (AppImage + `.deb`) bundles, and [`aur-publish.yml`](./.github/workflows/aur-publish.yml) to push the bumped [PKGBUILD](./packaging/arch/PKGBUILD) to the AUR. The PKGBUILD's `pkgver` is part of the release-please bump (see `release-please-config.json`), so the AUR always tracks the latest release.
 
-This needs two one-time repo secrets, `APP_ID` and `APP_PRIVATE_KEY`, for a GitHub App with `contents:write` and `pull_requests:write`. A release created by the default `GITHUB_TOKEN` won't trigger the build workflow, which is why the App is needed.
+This needs three one-time repo secrets: `APP_ID` and `APP_PRIVATE_KEY` for a GitHub App with `contents:write` and `pull_requests:write` (a release created by the default `GITHUB_TOKEN` won't trigger the build workflows, which is why the App is needed), plus `AUR_SSH_PRIVATE_KEY` (an SSH key whose public half is registered on the AUR account) for the AUR push.
 
 ## License
 
