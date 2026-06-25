@@ -15,6 +15,10 @@
           "type": "json",
           "path": "src-tauri/tauri.conf.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "generic",
+          "path": "packaging/arch/PKGBUILD"
         }
       ]
     }
