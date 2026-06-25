@@ -55,15 +55,17 @@ jobs:
       - name: frontend compiles to WASM
         run: dx build
 
-  # Lint + test on the platforms that have a working video surface. Linux is
-  # excluded (no surface yet); the `wasm` job covers the portable core there.
+  # Lint + test on every platform that has a working video surface
+  # (macOS, Windows, Linux). The `wasm` job separately covers the portable core.
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        # ubuntu-24.04 ships libmpv.so.2 (mpv 0.37) for the `libmpv2` crate;
+        # 22.04's libmpv.so.1 (mpv 0.34) would fail to link.
+        os: [macos-latest, windows-latest, ubuntu-24.04]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -83,5 +85,15 @@ jobs:
           # untrusted taps. mpv comes from the trusted core tap.
           brew untap aws/tap azure/bicep 2>/dev/null || true
           brew install mpv
+      # Linux links the system libmpv and builds against GTK3 + WebKitGTK
+      # (see src-tauri/src/playback/linux.rs).
+      - name: Install mpv + GTK deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev \
+            libmpv-dev libssl-dev pkg-config
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo test --all

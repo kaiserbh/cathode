@@ -23,7 +23,7 @@ Windows x64, macOS (Apple Silicon and Intel), and Linux (Wayland and X11).
 | --- | --- |
 | Windows x64 | libmpv and ANGLE are vendored in the repo (Git LFS), so there's no extra setup. |
 | macOS (Apple Silicon / Intel) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. |
-| Linux (Wayland / X11) | Uses the distro's libmpv. Install the system libraries first: `mpv`/`libmpv`, `libepoxy`, GTK 3, and WebKitGTK (for example `sudo pacman -S mpv libepoxy gtk3 webkit2gtk-4.1` on Arch, or `sudo apt install libmpv-dev libepoxy-dev libgtk-3-dev libwebkit2gtk-4.1-dev` on Debian/Ubuntu). |
+| Linux (Wayland / X11) | Released as an **AppImage** and a **.deb**, both built against the distro's libmpv. The AppImage targets recent distributions (glibc 2.39+, e.g. Ubuntu 24.04 / current rolling releases). Arch users build from source (see [Install](#install)). |
 
 The released binaries aren't code-signed yet, so macOS warns through Gatekeeper and Windows through SmartScreen. The [install](#install) section explains how to get past that.
 
@@ -62,6 +62,25 @@ Download the latest build from the [releases page](https://github.com/kaiserbh/c
 
 - Windows: run the `.msi` (or the NSIS `.exe`). If SmartScreen warns, choose "More info", then "Run anyway".
 - macOS: install mpv first with `brew install mpv`, then open the `.dmg`. If Gatekeeper blocks it on first launch, right-click the app and choose Open, or run `xattr -dr com.apple.quarantine /Applications/Cathode.app`. Pick the Apple Silicon or Intel build for your Mac.
+- Linux: download the `.AppImage` (`chmod +x` it and run), or the `.deb` (`sudo apt install ./Cathode_*.deb`). Both need the system libmpv at runtime; on Debian/Ubuntu the `.deb` pulls it in, and for the AppImage install `mpv` (or `libmpv2`) yourself. The AppImage targets recent distributions (glibc 2.39+).
+
+### Arch Linux
+
+Arch isn't covered by the release artifacts, so build from source. The one-liner installs the dependencies, builds, and installs Cathode plus a launcher entry:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kaiserbh/cathode/main/scripts/install-arch.sh | sh
+```
+
+Prefer a real package? Build with `makepkg` from the checked-in [PKGBUILD](./packaging/arch/PKGBUILD):
+
+```sh
+git clone https://github.com/kaiserbh/cathode
+cd cathode/packaging/arch
+makepkg -si
+```
+
+Either way the runtime dependencies are `mpv` (provides libmpv), `gtk3`, and `webkit2gtk-4.1`.
 
 ## Building from source
 
@@ -93,7 +112,7 @@ git clone https://github.com/kaiserbh/cathode
 
 `build.rs` points the linker at the vendored `mpv.lib` and copies the runtime DLLs next to the built binaries. If you see `LINK : fatal error LNK1181: cannot open input file 'mpv.lib'`, the LFS files weren't fetched, so run `git lfs pull`.
 
-On Linux, install the system libraries listed under [Platform support](#platform-support) (libmpv, libepoxy, GTK 3, WebKitGTK) before building; there's nothing vendored.
+On Linux, install the system libraries before building (nothing is vendored): libmpv, GTK 3, and WebKitGTK, plus their `-dev` packages. On Arch: `sudo pacman -S mpv gtk3 webkit2gtk-4.1`. On Debian/Ubuntu: `sudo apt install libmpv-dev libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev`. The build links `libmpv.so.2` (mpv 0.37 or newer), so on older releases that still ship mpv 0.34 you'll need a newer libmpv. The GL entry points are resolved at runtime through `libEGL`/`libGL` (shipped with Mesa), so there's no libepoxy dependency.
 
 ### Common commands
 
@@ -110,12 +129,11 @@ On Linux, install the system libraries listed under [Platform support](#platform
 Roughly in order of priority. Contributions to any of these are welcome.
 
 - Plain M3U/M3U8 playlists: load a playlist by URL or file, with no Xtream account required (`cathode-core::sources::m3u`, deriving stable IDs from `tvg-id` or name plus url).
-- Linux in the release matrix. Playback already works on Wayland and X11 via a `GtkGLArea` surface; packaging (Flatpak/AppImage) is the remaining piece.
 - Bundle libmpv into the macOS `.app` so `brew install mpv` is no longer required.
 - Code signing and notarization (Apple notarization, Windows Authenticode) so releases launch without warnings.
 - Quality-of-life work: better search and filtering, keyboard shortcuts, resume-from-position, a configurable default volume and `hwdec`, and theming.
 - More EPG: catch-up/archive, reminders, and channel logos.
-- Maybe later: an in-app updater, Windows ARM64, and Linux Flatpak/AppImage packaging.
+- Maybe later: an in-app updater, Windows ARM64, a Linux Flatpak, and an AUR package.
 
 ## Contributing
 
@@ -130,7 +148,7 @@ Pull requests are welcome. A few things worth knowing:
 Releases come straight from the commit history:
 
 1. When commits land on `main`, release-please opens (and keeps updating) a "chore: release X.Y.Z" PR that bumps the version everywhere and updates `CHANGELOG.md`.
-2. Merging that PR tags `vX.Y.Z` and publishes a GitHub release, which kicks off [`release-build.yml`](./.github/workflows/release-build.yml) to build and upload the macOS and Windows bundles.
+2. Merging that PR tags `vX.Y.Z` and publishes a GitHub release, which kicks off [`release-build.yml`](./.github/workflows/release-build.yml) to build and upload the macOS, Windows, and Linux (AppImage + `.deb`) bundles.
 
 This needs two one-time repo secrets, `APP_ID` and `APP_PRIVATE_KEY`, for a GitHub App with `contents:write` and `pull_requests:write`. A release created by the default `GITHUB_TOKEN` won't trigger the build workflow, which is why the App is needed.
 
