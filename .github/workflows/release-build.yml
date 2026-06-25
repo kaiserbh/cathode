@@ -14,6 +14,13 @@ concurrency:
   group: release-build-${{ github.event.release.tag_name }}
   cancel-in-progress: false
 
+# Make cargo resilient to transient crates.io / git network failures in CI
+# (e.g. "[16] Error in the HTTP2 framing layer"). Retries cost nothing on success;
+# the git CLI is more reliable than libgit2 for the dioxus-primitives git dep.
+env:
+  CARGO_NET_RETRY: "10"
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
 jobs:
   build:
     name: ${{ matrix.os }} (${{ matrix.arch }})
