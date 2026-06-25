@@ -2,20 +2,16 @@
 #
 # PKGBUILD for Cathode, a cross-platform IPTV player (Tauri + Dioxus + mpv).
 #
-# Build + install locally with:  makepkg -si
+# Build + install locally with:  makepkg -si   (no AUR helper required)
 #
 # Notes for maintaining this on the AUR:
 #   - keep `pkgver` in sync with the release tag (it maps to v$pkgver below),
 #   - regenerate the source info on every change: makepkg --printsrcinfo > .SRCINFO
 #   - lint with: namcap PKGBUILD && namcap cathode-*.pkg.tar.zst
-#   - the build needs network access: `dx` downloads a matching wasm-bindgen, and
-#     rustup fetches the toolchain pinned in the repo's rust-toolchain.toml. This
-#     is fine for makepkg/AUR helpers, but a fully network-isolated chroot build
-#     would need those pre-provisioned.
-#
-# `dioxus-cli` and `tauri-cli` are AUR packages. Without an AUR helper, install
-# them with cargo and drop them from makedepends:
-#   cargo install --locked dioxus-cli@0.7.9 tauri-cli
+#   - the build needs network access: `dx` downloads a matching wasm-bindgen,
+#     rustup fetches the toolchain pinned in the repo's rust-toolchain.toml, and
+#     prepare() builds tauri-cli. This is fine for makepkg/AUR helpers, but a
+#     fully network-isolated chroot build would need those pre-provisioned.
 pkgname=cathode
 pkgver=0.5.1
 pkgrel=1
@@ -28,10 +24,12 @@ license=('GPL-3.0-or-later')
 depends=('mpv' 'gtk3' 'webkit2gtk-4.1')
 # Build: rustup honours the repo's rust-toolchain.toml, so it installs the pinned
 # toolchain AND the wasm32-unknown-unknown target the Dioxus frontend compiles to
-# (the plain `rust` package would need `rust-wasm` and ignores the pin). dx +
-# tauri-cli drive the build and come from the AUR. base-devel (always present for
-# makepkg) supplies the C toolchain and pkgconf; git is for the VCS source.
-makedepends=('rustup' 'git' 'dioxus-cli' 'tauri-cli')
+# (the plain `rust` package would need `rust-wasm` and ignores the pin). dioxus-cli
+# (dx) is in the official repos. tauri-cli is NOT, so prepare() builds it into a
+# package-local prefix to keep this buildable with bare makepkg. base-devel
+# (always present for makepkg) supplies the C toolchain and pkgconf; git is for
+# the VCS source.
+makedepends=('rustup' 'git' 'dioxus-cli')
 # Cargo's release profile already does fat LTO; don't let makepkg inject -flto
 # into the C deps (e.g. bundled sqlite) on top of it.
 options=('!lto')
@@ -40,12 +38,19 @@ sha256sums=('SKIP')
 
 prepare() {
   cd "$srcdir/$pkgname"
-  # Pre-fetch crates against the committed lockfile (fails early, primes cache).
+  # Isolate cargo state from the user's ~/.cargo.
+  export CARGO_HOME="$srcdir/cargo-home"
+  # tauri-cli isn't in the official repos; build a pinned copy into a
+  # package-local prefix so `cargo tauri` is available without an AUR helper.
+  cargo install --locked --version '^2' --root "$srcdir/tools" tauri-cli
+  # Pre-fetch the project's crates against the committed lockfile.
   cargo fetch --locked
 }
 
 build() {
   cd "$srcdir/$pkgname"
+  export CARGO_HOME="$srcdir/cargo-home"
+  export PATH="$srcdir/tools/bin:$PATH"
   # --no-bundle: produce just the release binary (installed directly; runtime
   # libraries come from depends), while still running the frontend
   # beforeBuildCommand (dx bundle). rust-toolchain.toml selects the toolchain.
