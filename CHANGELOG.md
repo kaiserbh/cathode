@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/kaiserbh/cathode/compare/v0.5.2...v0.5.3) (2026-06-25)
+
+
+### Features
+
+* **aur:** added aur build and ci ([#22](https://github.com/kaiserbh/cathode/issues/22)) ([cfd9771](https://github.com/kaiserbh/cathode/commit/cfd97718f0f4d1f4991f42dd6b209db431444bc1))
+
 ## [0.5.2](https://github.com/kaiserbh/cathode/compare/v0.5.1...v0.5.2) (2026-06-25)
 
 
