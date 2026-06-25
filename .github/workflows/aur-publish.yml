@@ -1,0 +1,46 @@
+name: Publish to AUR
+
+# Pushes the canonical packaging/arch/PKGBUILD to the AUR. On a published release
+# this runs under release-please's GitHub App identity, the same as release-build.yml.
+# workflow_dispatch is the manual escape hatch (and bootstraps the first publish).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aur-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # On a release: the tag, whose commit carries the release-please-bumped
+      # PKGBUILD. On workflow_dispatch: the branch it was run from (main).
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      # Read pkgver straight from the PKGBUILD so the commit message is right for
+      # both triggers (a release tag and a manual dispatch).
+      - id: ver
+        run: echo "pkgver=$(sed -n 's/^pkgver=\([^ ]*\).*/\1/p' packaging/arch/PKGBUILD)" >> "$GITHUB_OUTPUT"
+
+      # Regenerates .SRCINFO in an Arch container and pushes to aur.archlinux.org
+      # (creating the package on first push). It only parses metadata via
+      # `makepkg --printsrcinfo`; it never runs prepare()/build().
+      - name: Publish cathode to the AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4
+        with:
+          pkgname: cathode
+          pkgbuild: ./packaging/arch/PKGBUILD
+          commit_username: KaiserBh
+          commit_email: developer.kaiserbh.f01xk@simplelogin.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ steps.ver.outputs.pkgver }}"
+          ssh_keyscan_types: rsa,ed25519
+          updpkgsums: false
