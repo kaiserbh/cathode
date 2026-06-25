@@ -30,7 +30,6 @@ jobs:
       matrix:
         include:
           - { os: macos-latest, arch: arm64, target: aarch64-apple-darwin, args: "--target aarch64-apple-darwin" }
-          - { os: macos-13, arch: x64, target: x86_64-apple-darwin, args: "--target x86_64-apple-darwin" }
           - { os: windows-latest, arch: x64, target: "", args: "" }
           # ubuntu-24.04 ships libmpv.so.2 (mpv 0.37), which the `libmpv2` crate
           # links against; 22.04's libmpv.so.1 (mpv 0.34) would fail to link.
