@@ -6,30 +6,38 @@
 
 use cathode_core::error::AppError;
 use cathode_core::model::{Stream, StreamKind};
-use cathode_core::sources::xtream::{XtreamCredentials, XtreamSource};
+use cathode_core::sources::xtream::XtreamSource;
+use cathode_core::sources::SourceCredentials;
 use tauri::State;
 use tracing::info_span;
 
 use crate::playback::Player;
 
-/// Load and play a stream. The playable URL depends on the content kind: Live plays
-/// `.ts`, VOD/Series use the stream's `container_extension` (defaulting to `mp4`).
+/// Load and play a stream. For Xtream the playable URL is built from the content
+/// kind (Live plays `.ts`; VOD/Series use the stream's `container_extension`,
+/// defaulting to `mp4`). For an M3U source the entry's URL is already the playable
+/// URL, kept verbatim in `provider_id`.
 #[tauri::command]
 pub fn play_stream(
     player: State<'_, Player>,
-    creds: XtreamCredentials,
+    creds: SourceCredentials,
     stream: Stream,
 ) -> Result<(), AppError> {
     let _span =
         info_span!("play_stream", provider_id = %stream.provider_id, kind = ?stream.kind).entered();
     tracing::info!(provider_id = %stream.provider_id, kind = ?stream.kind, "playing stream");
-    let source = XtreamSource::from_credentials(&creds);
-    let id = &stream.provider_id;
-    let ext = stream.container_extension.as_deref();
-    let url = match stream.kind {
-        StreamKind::Live => source.live_stream_url(id, "ts"),
-        StreamKind::Vod => source.vod_stream_url(id, ext.unwrap_or("mp4")),
-        StreamKind::Series => source.series_episode_url(id, ext.unwrap_or("mp4")),
+    let url = match &creds {
+        SourceCredentials::Xtream(creds) => {
+            let source = XtreamSource::from_credentials(creds);
+            let id = &stream.provider_id;
+            let ext = stream.container_extension.as_deref();
+            match stream.kind {
+                StreamKind::Live => source.live_stream_url(id, "ts"),
+                StreamKind::Vod => source.vod_stream_url(id, ext.unwrap_or("mp4")),
+                StreamKind::Series => source.series_episode_url(id, ext.unwrap_or("mp4")),
+            }
+        }
+        SourceCredentials::M3u(_) => stream.provider_id.clone(),
     };
     player.load(&url)
 }

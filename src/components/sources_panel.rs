@@ -1,31 +1,38 @@
-//! The Sources panel: switch between saved Xtream accounts, add a new one, or
-//! remove one. Presentational — `Browse` owns the state and the handlers.
+//! The Sources panel: switch between saved sources (Xtream accounts and M3U
+//! playlists), add a new one, or remove one. Presentational — `Browse` owns the
+//! state and the handlers.
 
-use cathode_core::sources::xtream::XtreamCredentials;
+use cathode_core::sources::SourceCredentials;
 use dioxus::prelude::*;
 
 use crate::components::icons::Close;
 use crate::components::{ConnectForm, PanelDialog};
 use crate::ui::button::{Button, ButtonSize, ButtonVariant};
 
-/// A human label for a saved account: `username @ host` (scheme stripped).
-fn label(creds: &XtreamCredentials) -> String {
-    let host = creds
-        .base_url
-        .strip_prefix("https://")
-        .or_else(|| creds.base_url.strip_prefix("http://"))
-        .unwrap_or(&creds.base_url);
-    format!("{} @ {}", creds.username, host)
+/// A human label for a saved source: `username @ host` for Xtream (scheme
+/// stripped), or the playlist name for M3U.
+fn label(creds: &SourceCredentials) -> String {
+    match creds {
+        SourceCredentials::Xtream(c) => {
+            let host = c
+                .base_url
+                .strip_prefix("https://")
+                .or_else(|| c.base_url.strip_prefix("http://"))
+                .unwrap_or(&c.base_url);
+            format!("{} @ {}", c.username, host)
+        }
+        SourceCredentials::M3u(c) => c.name.clone(),
+    }
 }
 
 #[component]
 pub fn SourcesPanel(
-    sources: Vec<XtreamCredentials>,
-    active: Option<XtreamCredentials>,
+    sources: Vec<SourceCredentials>,
+    active: Option<SourceCredentials>,
     connecting: bool,
-    on_select: EventHandler<XtreamCredentials>,
-    on_forget: EventHandler<XtreamCredentials>,
-    on_connect: EventHandler<XtreamCredentials>,
+    on_select: EventHandler<SourceCredentials>,
+    on_forget: EventHandler<SourceCredentials>,
+    on_connect: EventHandler<SourceCredentials>,
     on_close: EventHandler<()>,
 ) -> Element {
     rsx! {
@@ -56,6 +63,7 @@ pub fn SourcesPanel(
                             let is_active = active.as_ref() == Some(&source);
                             let select_source = source.clone();
                             let forget_source = source.clone();
+                            let key = source.source_id();
                             let row = if is_active {
                                 "bg-sky-50 dark:bg-sky-950"
                             } else {
@@ -63,7 +71,7 @@ pub fn SourcesPanel(
                             };
                             rsx! {
                                 li {
-                                    key: "{source.base_url}|{source.username}",
+                                    key: "{key}",
                                     class: "flex items-center gap-2 rounded-md {row}",
                                     button {
                                         class: "flex-1 truncate px-3 py-2 text-left text-sm",

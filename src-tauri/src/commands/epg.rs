@@ -8,24 +8,32 @@
 //! has no `epg_channel_id`. EPG is best-effort — a provider without `xmltv.php`
 //! surfaces an error the caller can ignore.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use cathode_core::catalog::Catalog;
-use cathode_core::epg::{name_index, now_next, parse_xmltv};
-use cathode_core::error::AppError;
+use cathode_core::epg::{
+    filter_to_channels, merge_guides, name_index, normalize_name, now_next, parse_xmltv,
+};
+use cathode_core::error::{AppError, CoreError};
 use cathode_core::model::{NowNext, Programme};
+use cathode_core::sources::m3u::M3uCredentials;
 use cathode_core::sources::xtream::{XtreamCredentials, XtreamSource};
+use cathode_core::sources::SourceCredentials;
 use cathode_core::transport::Transport;
 use tauri::{AppHandle, Manager, State};
 use tokio::task;
 use tracing::{info_span, Instrument};
 
-use crate::commands::sources::{join_err, source_id};
+use crate::commands::sources::{ensure_playlist, join_err, load_guide_text, source_id};
 use crate::state::{AppState, CatalogState};
 
 /// How far around `now` to read cached programmes when computing now/next from disk.
 const NOW_NEXT_WINDOW: i64 = 24 * 3600;
+
+/// Cap on how many XMLTV files we'll fetch for one playlist, so a header listing
+/// dozens of guides can't trigger an unbounded download.
+const MAX_EPG_FILES: usize = 10;
 
 fn unix_now() -> i64 {
     SystemTime::now()
@@ -136,6 +144,121 @@ fn group_by_channel(programmes: Vec<Programme>) -> HashMap<String, Vec<Programme
     map
 }
 
+/// Build (once per session) the merged, channel-filtered guide for an M3U playlist
+/// from the EPG URLs it carries, caching it in `AppState.epg` like the Xtream path.
+/// Each source is fetched (gzip-aware), parsed off the async runtime, and trimmed to
+/// the playlist's own channels so a huge guide collapses to what's relevant.
+async fn ensure_m3u_guide(
+    state: &AppState,
+    catalog: &CatalogState,
+    creds: &M3uCredentials,
+    sid: &str,
+) -> Result<(), AppError> {
+    if state.epg.lock().unwrap().contains_key(sid) {
+        return Ok(());
+    }
+
+    // The playlist's channels drive filtering: match by tvg-id, then by name.
+    let streams = ensure_playlist(state, creds)
+        .await
+        .map_err(AppError::from)?;
+    let wanted_ids: HashSet<String> = streams
+        .iter()
+        .filter_map(|s| s.epg_channel_id.clone())
+        .collect();
+    let wanted_names: HashSet<String> = streams.iter().map(|s| normalize_name(&s.name)).collect();
+
+    let mut urls = creds.epg_urls.clone();
+    if urls.len() > MAX_EPG_FILES {
+        tracing::warn!(
+            count = urls.len(),
+            cap = MAX_EPG_FILES,
+            "capping EPG sources for playlist"
+        );
+        urls.truncate(MAX_EPG_FILES);
+    }
+
+    let mut guides = Vec::new();
+    for url in &urls {
+        let text = match load_guide_text(&state.transport, url).await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::warn!("m3u epg fetch failed: {e}");
+                continue;
+            }
+        };
+        let ids = wanted_ids.clone();
+        let names = wanted_names.clone();
+        match task::spawn_blocking(move || {
+            let mut guide = parse_xmltv(&text)?;
+            filter_to_channels(&mut guide, &ids, &names);
+            Ok::<_, CoreError>(guide)
+        })
+        .await
+        {
+            Ok(Ok(guide)) => guides.push(guide),
+            Ok(Err(e)) => tracing::warn!("m3u epg parse failed: {e}"),
+            Err(e) => tracing::warn!("m3u epg parse task failed: {e}"),
+        }
+    }
+
+    let guide = merge_guides(guides);
+    tracing::info!(
+        programmes = guide.programmes.len(),
+        channels = guide.channels.len(),
+        "built m3u guide"
+    );
+
+    // Write-through to the SQLite cache (best-effort), like the Xtream guide path.
+    if let Some(cat) = catalog.0.clone() {
+        let sid = sid.to_string();
+        let programmes = guide.programmes.clone();
+        match task::spawn_blocking(move || cat.replace_programmes(&sid, &programmes)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => tracing::warn!("cache m3u programmes failed: {e}"),
+            Err(e) => tracing::warn!("cache m3u programmes task failed: {e}"),
+        }
+    }
+
+    state.epg.lock().unwrap().insert(sid.to_string(), guide);
+    Ok(())
+}
+
+/// Now/next for an M3U playlist: build its guide if needed, then serve from memory.
+async fn m3u_now_next(
+    state: &AppState,
+    catalog: &CatalogState,
+    creds: &M3uCredentials,
+    sid: &str,
+    now: i64,
+) -> Result<HashMap<String, NowNext>, AppError> {
+    ensure_m3u_guide(state, catalog, creds, sid).await?;
+    let guide = state.epg.lock().unwrap();
+    let Some(guide) = guide.get(sid) else {
+        return Ok(HashMap::new());
+    };
+    let mut map = now_next(&guide.programmes, now);
+    add_name_aliases(&mut map, &name_index(&guide.channels));
+    Ok(map)
+}
+
+/// Windowed programmes for an M3U playlist's timeline guide.
+async fn m3u_programmes(
+    state: &AppState,
+    catalog: &CatalogState,
+    creds: &M3uCredentials,
+    sid: &str,
+    from: i64,
+    to: i64,
+) -> Result<HashMap<String, Vec<Programme>>, AppError> {
+    ensure_m3u_guide(state, catalog, creds, sid).await?;
+    let guide = state.epg.lock().unwrap();
+    let Some(guide) = guide.get(sid) else {
+        return Ok(HashMap::new());
+    };
+    Ok(window_from_guide(guide, from, to))
+}
+
 /// Now/next for every channel of an account that has guide data, keyed by channel
 /// id and by normalized display-name.
 #[tauri::command]
@@ -143,10 +266,17 @@ pub async fn epg_now_next(
     app: AppHandle,
     state: State<'_, AppState>,
     catalog: State<'_, CatalogState>,
-    creds: XtreamCredentials,
+    creds: SourceCredentials,
 ) -> Result<HashMap<String, NowNext>, AppError> {
     let sid = source_id(&creds);
     let now = unix_now();
+    // An M3U playlist builds its guide from the EPG URLs it carries.
+    let creds = match creds {
+        SourceCredentials::M3u(m3u) => {
+            return m3u_now_next(&state, &catalog, &m3u, &sid, now).await
+        }
+        SourceCredentials::Xtream(c) => c,
+    };
 
     // Already loaded this session: serve from memory (with name-alias fallback).
     {
@@ -186,11 +316,18 @@ pub async fn epg_programmes(
     app: AppHandle,
     state: State<'_, AppState>,
     catalog: State<'_, CatalogState>,
-    creds: XtreamCredentials,
+    creds: SourceCredentials,
     from: i64,
     to: i64,
 ) -> Result<HashMap<String, Vec<Programme>>, AppError> {
     let sid = source_id(&creds);
+    // An M3U playlist builds its guide from the EPG URLs it carries.
+    let creds = match creds {
+        SourceCredentials::M3u(m3u) => {
+            return m3u_programmes(&state, &catalog, &m3u, &sid, from, to).await
+        }
+        SourceCredentials::Xtream(c) => c,
+    };
 
     // Already loaded this session: serve from memory (with name-alias fallback).
     {

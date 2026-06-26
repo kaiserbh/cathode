@@ -40,6 +40,8 @@ chrono = "0.4"
 # Embedded playback: link libmpv directly and drive it via the render API.
 libmpv2 = { version = "6", features = ["render"] }
 raw-window-handle = "0.6"
+tauri-plugin-dialog = "2.7.1"
+flate2 = "1.1.9"
 
 # macOS: own a native OpenGL view inside the Tauri window for the mpv surface.
 [target.'cfg(target_os = "macos")'.dependencies]

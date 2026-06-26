@@ -29,8 +29,8 @@ The released binaries aren't code-signed, so macOS warns through Gatekeeper (it 
 
 ## Features
 
-- Xtream Codes accounts: live TV, movies, and series with seasons and episodes. You can save several accounts (with a recently-used list), and there's an incognito mode that doesn't keep history. Plain M3U/M3U8 playlists aren't supported yet (see the [roadmap](#roadmap)).
-- Programme guide (EPG): an XMLTV parser feeds a now/next view and a scrollable timeline, cached in SQLite. The guide grid is virtualized, and clicking a programme opens a detail popover.
+- Sources: Xtream Codes accounts (live TV, movies, and series with seasons and episodes) and plain M3U/M3U8 playlists (loaded by URL or local file, no account required — every entry is a live channel grouped by `group-title`). You can save several sources of either kind (with a recently-used list), and there's an incognito mode that doesn't keep history.
+- Programme guide (EPG): an XMLTV parser feeds a now/next view and a scrollable timeline, cached in SQLite. Xtream uses the account's `xmltv.php`; M3U playlists pull the (optionally gzipped) XMLTV URLs declared in their `#EXTM3U` header — auto-detected into an editable field and trimmed to the channels the playlist carries. The guide grid is virtualized, and clicking a programme opens a detail popover.
 - Playback through libmpv's render API: play, pause, resume, stop, volume, mute, fullscreen, and hardware decoding (`hwdec=auto-safe`). Video draws on a native GL surface behind the transparent webview (an `NSOpenGLView` on macOS, an ANGLE EGL/Direct3D 11 surface on Windows, a `GtkGLArea` on Linux), with a small playback HUD.
 - Local catalog: SQLite caches categories, streams, and programmes. Favorites and watch history use stable IDs (an xxhash3 of the source plus the provider's own id) so they survive a re-sync and don't break when a provider reorders its list.
 - UI built with Dioxus, the [dioxus-primitives](https://github.com/DioxusLabs/components) components, and [Lucide](https://lucide.dev) icons: tabs for Live, Movies, Series, Favorites, and History, plus search, series drill-down, a settings panel, and a logs panel whose level you can change at runtime.
@@ -140,7 +140,6 @@ On Linux, install the system libraries before building (nothing is vendored): li
 
 Roughly in order of priority. Contributions to any of these are welcome.
 
-- Plain M3U/M3U8 playlists: load a playlist by URL or file, with no Xtream account required (`cathode-core::sources::m3u`, deriving stable IDs from `tvg-id` or name plus url).
 - Bundle libmpv into the macOS `.app` so `brew install mpv` is no longer required.
 - Quality-of-life work: better search and filtering, keyboard shortcuts, resume-from-position, a configurable default volume and `hwdec`, and theming.
 - More EPG: catch-up/archive, reminders, and channel logos.

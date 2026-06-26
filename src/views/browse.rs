@@ -1,6 +1,6 @@
-//! The browse screen: pick (or add) an Xtream account, then explore its live
-//! channels, favorites, and watch history. Owns all the state; components are
-//! presentational.
+//! The browse screen: pick (or add) a source — an Xtream account or an M3U
+//! playlist — then explore its live channels, favorites, and watch history. Owns
+//! all the state; components are presentational.
 //!
 //! Sources, favorites, history, and settings are persisted. On launch the
 //! most-recently-used account is auto-opened from cache and refreshed. An Options
@@ -14,7 +14,7 @@ use cathode_core::model::{
     Category, CategoryId, ChannelView, Episode, LogLevel, LogLine, NowNext, Programme, SeriesInfo,
     Settings, Stream, StreamId, StreamKind,
 };
-use cathode_core::sources::xtream::XtreamCredentials;
+use cathode_core::sources::SourceCredentials;
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 
@@ -27,7 +27,7 @@ use crate::components::{
 };
 
 /// Move a source to the front of the most-recently-used list (de-duplicated).
-fn bump_source(mut sources: Signal<Vec<XtreamCredentials>>, c: XtreamCredentials) {
+fn bump_source(mut sources: Signal<Vec<SourceCredentials>>, c: SourceCredentials) {
     let mut list = sources.write();
     list.retain(|s| s != &c);
     list.insert(0, c);
@@ -54,7 +54,7 @@ fn mark_available(available: &mut Signal<HashSet<StreamKind>>, kind: StreamKind,
 
 #[component]
 pub fn Browse() -> Element {
-    let mut creds = use_signal(|| None::<XtreamCredentials>);
+    let mut creds = use_signal(|| None::<SourceCredentials>);
     let mut categories = use_signal(Vec::<Category>::new);
     let mut selected = use_signal(|| None::<CategoryId>);
     let mut streams = use_signal(Vec::<Stream>::new);
@@ -62,7 +62,7 @@ pub fn Browse() -> Element {
     let mut error = use_signal(|| None::<AppError>);
     let mut playing = use_signal(|| None::<Stream>);
     let mut paused = use_signal(|| false);
-    let mut sources = use_signal(Vec::<XtreamCredentials>::new);
+    let mut sources = use_signal(Vec::<SourceCredentials>::new);
     let mut show_sources = use_signal(|| false);
     let mut settings = use_signal(Settings::default);
     let mut incognito = use_signal(|| false);
@@ -95,7 +95,7 @@ pub fn Browse() -> Element {
 
     // Make a source active: reset to the Live tab (the per-kind effect below loads its
     // categories), and load its favorites + history + EPG.
-    let activate = use_callback(move |new_creds: XtreamCredentials| {
+    let activate = use_callback(move |new_creds: SourceCredentials| {
         creds.set(Some(new_creds.clone()));
         selected.set(None);
         streams.set(Vec::new());
@@ -132,7 +132,7 @@ pub fn Browse() -> Element {
 
     // Load the categories for a content kind: paint the cache instantly, then refresh
     // from the network (dropping the response if the user switched kinds meanwhile).
-    let load_kind = use_callback(move |(current, kind): (XtreamCredentials, StreamKind)| {
+    let load_kind = use_callback(move |(current, kind): (SourceCredentials, StreamKind)| {
         selected.set(None);
         streams.set(Vec::new());
         categories.set(Vec::new());
@@ -161,7 +161,7 @@ pub fn Browse() -> Element {
                     // Warm the cache for the whole library: fetch every category's
                     // streams in the background (once per account + kind) so search is
                     // comprehensive and switching categories is instant.
-                    let key = format!("{}|{}|{:?}", current.base_url, current.username, kind);
+                    let key = format!("{}|{:?}", current.source_id(), kind);
                     if !prefetched.read().contains(&key) {
                         prefetched.write().insert(key);
                         let pf_creds = current.clone();
@@ -250,7 +250,7 @@ pub fn Browse() -> Element {
 
     // Fetch the windowed guide programmes (for the timeline) for a 6h window from the
     // current half-hour. Stamps the window it fetched so the timeline positions match.
-    let load_programmes = use_callback(move |current: XtreamCredentials| {
+    let load_programmes = use_callback(move |current: SourceCredentials| {
         let now = crate::format::now_unix();
         let from = now - now.rem_euclid(1800);
         let to = from + 6 * 3600;
@@ -307,19 +307,19 @@ pub fn Browse() -> Element {
         });
     });
 
-    let on_connect = move |new_creds: XtreamCredentials| {
+    let on_connect = move |new_creds: SourceCredentials| {
         activate.call(new_creds.clone());
         bump_source(sources, new_creds);
         show_sources.set(false);
     };
 
-    let on_select_source = move |c: XtreamCredentials| {
+    let on_select_source = move |c: SourceCredentials| {
         activate.call(c.clone());
         bump_source(sources, c);
         show_sources.set(false);
     };
 
-    let on_forget = move |c: XtreamCredentials| {
+    let on_forget = move |c: SourceCredentials| {
         let target = c.clone();
         spawn(async move {
             let _ = bindings::forget_source(&target).await;
@@ -701,7 +701,7 @@ pub fn Browse() -> Element {
             } else {
                 p {
                     class: "p-6 text-sm text-neutral-500",
-                    "Open Sources to add or pick an Xtream account."
+                    "Open Sources to add or pick a source."
                 }
             }
         }

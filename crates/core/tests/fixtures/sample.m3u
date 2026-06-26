@@ -1,0 +1,10 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="bbc1.uk" tvg-name="BBC One" tvg-logo="http://logo/bbc.png" group-title="UK",BBC One
+http://server/live/bbc1.ts
+#EXTINF:-1 tvg-id="itv.uk" tvg-logo="http://logo/itv.png" group-title="UK",ITV
+http://server/live/itv.ts
+#EXTVLCOPT:network-caching=1000
+#EXTINF:-1 group-title="Sports",Sky Sports Main Event
+http://server/live/skysports.ts
+#EXTINF:-1,Channel With No Group
+http://server/live/orphan.ts
