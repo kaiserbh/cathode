@@ -12,7 +12,7 @@ use cathode_core::error::AppError;
 use cathode_core::model::{
     Category, LogLevel, LogLine, NowNext, Programme, SeriesInfo, Settings, Stream, StreamKind,
 };
-use cathode_core::sources::xtream::XtreamCredentials;
+use cathode_core::sources::SourceCredentials;
 use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::prelude::*;
 
@@ -29,20 +29,20 @@ extern "C" {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CategoriesArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct KindCatArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
     kind: StreamKind,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct StreamsArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
     kind: StreamKind,
     category_id: Option<&'a str>,
 }
@@ -50,21 +50,21 @@ struct StreamsArgs<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PlayArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
     stream: &'a Stream,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SearchArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
     query: &'a str,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SeriesInfoArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
     series_id: &'a str,
 }
 
@@ -77,14 +77,14 @@ struct SettingsArgs<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FavoriteArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
     stream: &'a Stream,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RemoveFavoriteArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
     stream_id: &'a str,
 }
 
@@ -126,19 +126,36 @@ async fn call_unit(cmd: &str, args: &impl Serialize) -> Result<(), AppError> {
     }
 }
 
-/// All saved Xtream accounts, most-recently-used first.
-pub async fn saved_sources() -> Result<Vec<XtreamCredentials>, AppError> {
+/// All saved sources (Xtream accounts and M3U playlists), most-recently-used first.
+pub async fn saved_sources() -> Result<Vec<SourceCredentials>, AppError> {
     call("saved_sources", &NoArgs {}).await
 }
 
-/// Forget a saved account and drop its cached catalog.
-pub async fn forget_source(creds: &XtreamCredentials) -> Result<(), AppError> {
+/// Forget a saved source and drop its cached catalog.
+pub async fn forget_source(creds: &SourceCredentials) -> Result<(), AppError> {
     call_unit("forget_source", &CategoriesArgs { creds }).await
+}
+
+/// Open the native file picker for a local playlist; `None` if the user cancelled.
+pub async fn pick_playlist_file() -> Result<Option<String>, AppError> {
+    call("pick_playlist_file", &NoArgs {}).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DetectEpgArgs<'a> {
+    location: &'a str,
+}
+
+/// Detect the EPG (XMLTV) URLs a playlist declares in its `#EXTM3U` header, for
+/// pre-filling the M3U form's EPG field.
+pub async fn detect_playlist_epg(location: &str) -> Result<Vec<String>, AppError> {
+    call("detect_playlist_epg", &DetectEpgArgs { location }).await
 }
 
 /// Cached categories for an account (empty if nothing cached yet).
 pub async fn cached_categories(
-    creds: &XtreamCredentials,
+    creds: &SourceCredentials,
     kind: StreamKind,
 ) -> Result<Vec<Category>, AppError> {
     call("cached_categories", &KindCatArgs { creds, kind }).await
@@ -146,7 +163,7 @@ pub async fn cached_categories(
 
 /// Cached streams for an account + kind + category (empty if nothing cached yet).
 pub async fn cached_streams(
-    creds: &XtreamCredentials,
+    creds: &SourceCredentials,
     kind: StreamKind,
     category_id: &str,
 ) -> Result<Vec<Stream>, AppError> {
@@ -163,7 +180,7 @@ pub async fn cached_streams(
 
 /// List the categories of a content kind for an Xtream account.
 pub async fn list_categories(
-    creds: &XtreamCredentials,
+    creds: &SourceCredentials,
     kind: StreamKind,
 ) -> Result<Vec<Category>, AppError> {
     call("list_categories", &KindCatArgs { creds, kind }).await
@@ -172,7 +189,7 @@ pub async fn list_categories(
 /// List the streams of a content kind for an Xtream account, optionally scoped to a
 /// category.
 pub async fn list_streams(
-    creds: &XtreamCredentials,
+    creds: &SourceCredentials,
     kind: StreamKind,
     category_id: Option<&str>,
 ) -> Result<Vec<Stream>, AppError> {
@@ -189,7 +206,7 @@ pub async fn list_streams(
 
 /// Search the account's cached library (all kinds/categories) by name.
 pub async fn search_streams(
-    creds: &XtreamCredentials,
+    creds: &SourceCredentials,
     query: &str,
 ) -> Result<Vec<Stream>, AppError> {
     call("search_streams", &SearchArgs { creds, query }).await
@@ -197,7 +214,7 @@ pub async fn search_streams(
 
 /// Fetch the seasons and episodes of one series.
 pub async fn get_series_info(
-    creds: &XtreamCredentials,
+    creds: &SourceCredentials,
     series_id: &str,
 ) -> Result<SeriesInfo, AppError> {
     call("get_series_info", &SeriesInfoArgs { creds, series_id }).await
@@ -205,7 +222,7 @@ pub async fn get_series_info(
 
 /// Start playing a stream in the embedded mpv surface. The backend resolves the URL
 /// by the stream's kind (Live/VOD/Series episode).
-pub async fn play_stream(creds: &XtreamCredentials, stream: &Stream) -> Result<(), AppError> {
+pub async fn play_stream(creds: &SourceCredentials, stream: &Stream) -> Result<(), AppError> {
     call_unit("play_stream", &PlayArgs { creds, stream }).await
 }
 
@@ -259,27 +276,27 @@ pub async fn set_settings(settings: &Settings) -> Result<(), AppError> {
 }
 
 /// An account's favorites, most-recently-added first.
-pub async fn list_favorites(creds: &XtreamCredentials) -> Result<Vec<Stream>, AppError> {
+pub async fn list_favorites(creds: &SourceCredentials) -> Result<Vec<Stream>, AppError> {
     call("list_favorites", &CategoriesArgs { creds }).await
 }
 
 /// Mark a stream as a favorite of an account.
-pub async fn add_favorite(creds: &XtreamCredentials, stream: &Stream) -> Result<(), AppError> {
+pub async fn add_favorite(creds: &SourceCredentials, stream: &Stream) -> Result<(), AppError> {
     call_unit("add_favorite", &FavoriteArgs { creds, stream }).await
 }
 
 /// Remove a favorite by its stable stream id.
-pub async fn remove_favorite(creds: &XtreamCredentials, stream_id: &str) -> Result<(), AppError> {
+pub async fn remove_favorite(creds: &SourceCredentials, stream_id: &str) -> Result<(), AppError> {
     call_unit("remove_favorite", &RemoveFavoriteArgs { creds, stream_id }).await
 }
 
 /// An account's watch history, most-recently-watched first.
-pub async fn list_history(creds: &XtreamCredentials) -> Result<Vec<Stream>, AppError> {
+pub async fn list_history(creds: &SourceCredentials) -> Result<Vec<Stream>, AppError> {
     call("list_history", &CategoriesArgs { creds }).await
 }
 
 /// Record that a stream was watched (the caller gates this on settings/incognito).
-pub async fn record_watch(creds: &XtreamCredentials, stream: &Stream) -> Result<(), AppError> {
+pub async fn record_watch(creds: &SourceCredentials, stream: &Stream) -> Result<(), AppError> {
     call_unit("record_watch", &FavoriteArgs { creds, stream }).await
 }
 
@@ -289,21 +306,21 @@ pub async fn clear_history() -> Result<(), AppError> {
 }
 
 /// Now/next per channel (keyed by `epg_channel_id`) for an account's XMLTV guide.
-pub async fn epg_now_next(creds: &XtreamCredentials) -> Result<HashMap<String, NowNext>, AppError> {
+pub async fn epg_now_next(creds: &SourceCredentials) -> Result<HashMap<String, NowNext>, AppError> {
     call("epg_now_next", &CategoriesArgs { creds }).await
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ProgrammesArgs<'a> {
-    creds: &'a XtreamCredentials,
+    creds: &'a SourceCredentials,
     from: i64,
     to: i64,
 }
 
 /// Programmes overlapping `[from, to]` per channel, for the timeline guide.
 pub async fn epg_programmes(
-    creds: &XtreamCredentials,
+    creds: &SourceCredentials,
     from: i64,
     to: i64,
 ) -> Result<HashMap<String, Vec<Programme>>, AppError> {
