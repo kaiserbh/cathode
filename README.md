@@ -25,7 +25,7 @@ Windows x64, macOS (Apple Silicon), and Linux (Wayland and X11).
 | macOS (Apple Silicon) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. Intel Macs aren't shipped as binaries (GitHub retired the Intel runner); build from source. |
 | Linux (Wayland / X11) | Released as an **AppImage** and a **.deb**, both built against the distro's libmpv. The AppImage targets recent distributions (glibc 2.39+, e.g. Ubuntu 24.04 / current rolling releases). Arch users build from source (see [Install](#install)). |
 
-The released binaries aren't code-signed yet, so macOS warns through Gatekeeper and Windows through SmartScreen. The [install](#install) section explains how to get past that.
+The released binaries aren't code-signed, so macOS warns through Gatekeeper (it may even say the app is *"damaged"* — it isn't) and Windows through SmartScreen. The [install](#install) section explains how to get past that.
 
 ## Features
 
@@ -61,7 +61,13 @@ There's one normalized model. Every source produces the same `Stream`, `Category
 Download the latest build from the [releases page](https://github.com/kaiserbh/cathode/releases).
 
 - Windows: run the `.msi` (or the NSIS `.exe`). If SmartScreen warns, choose "More info", then "Run anyway".
-- macOS (Apple Silicon): install mpv first with `brew install mpv`, then open the `.dmg`. If Gatekeeper blocks it on first launch, right-click the app and choose Open, or run `xattr -dr com.apple.quarantine /Applications/Cathode.app`. Intel Macs aren't published as binaries; build from source.
+- macOS (Apple Silicon): install mpv first with `brew install mpv`, then open the `.dmg` and drag Cathode to Applications. The build isn't notarized, so on first launch macOS says **"Cathode is damaged and can't be opened"** — it isn't damaged, that's just the message macOS shows for unsigned downloaded apps. Clear the quarantine flag to run it:
+
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/Cathode.app
+  ```
+
+  (Right-clicking and choosing *Open* doesn't clear this particular message.) Intel Macs aren't published as binaries; build from source.
 - Linux: download the `.AppImage` (`chmod +x` it and run), or the `.deb` (`sudo apt install ./Cathode_*.deb`). Both need the system libmpv at runtime; on Debian/Ubuntu the `.deb` pulls it in, and for the AppImage install `mpv` (or `libmpv2`) yourself. The AppImage targets recent distributions (glibc 2.39+).
 
 ### Arch Linux
@@ -135,7 +141,6 @@ On Linux, install the system libraries before building (nothing is vendored): li
 Roughly in order of priority. Contributions to any of these are welcome.
 
 - Bundle libmpv into the macOS `.app` so `brew install mpv` is no longer required.
-- Code signing and notarization (Apple notarization, Windows Authenticode) so releases launch without warnings.
 - Quality-of-life work: better search and filtering, keyboard shortcuts, resume-from-position, a configurable default volume and `hwdec`, and theming.
 - More EPG: catch-up/archive, reminders, and channel logos.
 - Maybe later: an in-app updater, Windows ARM64, a Linux Flatpak, and an AUR package.
