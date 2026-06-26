@@ -1,6 +1,6 @@
 [package]
 name = "cathode"
-version = "0.5.3"
+version = "0.5.4"
 description = "Cathode: a cross-platform IPTV player (Tauri shell)"
 authors = ["KaiserBh"]
 edition = "2021"
