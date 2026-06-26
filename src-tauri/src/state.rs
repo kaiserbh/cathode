@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use cathode_core::epg::Guide;
+use cathode_core::model::Stream;
 
 use crate::catalog_sqlite::SqliteCatalog;
 use crate::http::ReqwestTransport;
@@ -17,6 +18,11 @@ use crate::http::ReqwestTransport;
 /// `source_id`), so now/next and the timeline can be recomputed cheaply without
 /// re-downloading the (large) guide. It is intentionally not persisted — EPG is
 /// time-sensitive.
+///
+/// `playlists` does the same for parsed M3U playlists: a playlist is one document
+/// covering the whole catalog, so we download+parse it at most once per session
+/// (keyed by `source_id`) rather than re-fetching it for every category the UI
+/// browses or prefetches.
 #[derive(Debug, Default)]
 pub struct AppState {
     pub transport: ReqwestTransport,
@@ -25,6 +31,8 @@ pub struct AppState {
     /// (triggered after serving the guide from the SQLite cache) doesn't kick off a
     /// second concurrent XMLTV download.
     pub epg_fetching: Mutex<HashSet<String>>,
+    /// Parsed M3U streams per source for the session (keyed by `source_id`).
+    pub playlists: Mutex<HashMap<String, Vec<Stream>>>,
 }
 
 impl AppState {

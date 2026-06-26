@@ -7,7 +7,7 @@
 use cathode_core::catalog::Catalog;
 use cathode_core::error::AppError;
 use cathode_core::model::{Settings, Stream};
-use cathode_core::sources::xtream::XtreamCredentials;
+use cathode_core::sources::SourceCredentials;
 use tauri::State;
 use tokio::task;
 
@@ -56,7 +56,7 @@ pub async fn set_settings(
 #[tauri::command]
 pub async fn list_favorites(
     catalog: State<'_, CatalogState>,
-    creds: XtreamCredentials,
+    creds: SourceCredentials,
 ) -> Result<Vec<Stream>, AppError> {
     let Some(cat) = catalog.0.clone() else {
         return Ok(Vec::new());
@@ -71,7 +71,7 @@ pub async fn list_favorites(
 #[tauri::command]
 pub async fn add_favorite(
     catalog: State<'_, CatalogState>,
-    creds: XtreamCredentials,
+    creds: SourceCredentials,
     stream: Stream,
 ) -> Result<(), AppError> {
     let Some(cat) = catalog.0.clone() else {
@@ -87,7 +87,7 @@ pub async fn add_favorite(
 #[tauri::command]
 pub async fn remove_favorite(
     catalog: State<'_, CatalogState>,
-    creds: XtreamCredentials,
+    creds: SourceCredentials,
     stream_id: String,
 ) -> Result<(), AppError> {
     let Some(cat) = catalog.0.clone() else {
@@ -104,7 +104,7 @@ pub async fn remove_favorite(
 #[tauri::command]
 pub async fn list_history(
     catalog: State<'_, CatalogState>,
-    creds: XtreamCredentials,
+    creds: SourceCredentials,
 ) -> Result<Vec<Stream>, AppError> {
     let Some(cat) = catalog.0.clone() else {
         return Ok(Vec::new());
@@ -121,7 +121,7 @@ pub async fn list_history(
 #[tauri::command]
 pub async fn record_watch(
     catalog: State<'_, CatalogState>,
-    creds: XtreamCredentials,
+    creds: SourceCredentials,
     stream: Stream,
 ) -> Result<(), AppError> {
     let Some(cat) = catalog.0.clone() else {

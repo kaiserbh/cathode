@@ -64,6 +64,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
         .manage(log_store)
         .manage(log_control)
@@ -136,6 +137,8 @@ pub fn run() {
             commands::sources::get_series_info,
             commands::sources::saved_sources,
             commands::sources::forget_source,
+            commands::sources::detect_playlist_epg,
+            commands::dialog::pick_playlist_file,
             commands::library::get_settings,
             commands::library::set_settings,
             commands::library::list_favorites,
