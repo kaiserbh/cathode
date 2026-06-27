@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/kaiserbh/cathode/compare/v0.5.3...v0.5.4) (2026-06-26)
+
+
+### Features
+
+* m3u playlist support ([#31](https://github.com/kaiserbh/cathode/issues/31)) ([ffbe1d2](https://github.com/kaiserbh/cathode/commit/ffbe1d2c75fe88392afaa7ee49a53bf98bb1ae64))
+
 ## [0.5.3](https://github.com/kaiserbh/cathode/compare/v0.5.2...v0.5.3) (2026-06-25)
 
 
