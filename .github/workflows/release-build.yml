@@ -85,7 +85,7 @@ jobs:
           crate: tauri-cli
           version: "^2"
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Build the AppImage without FUSE on the runner (appimagetool runs by
