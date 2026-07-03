@@ -28,7 +28,7 @@ cathode-core = { path = "../crates/core" }
 reqwest = "0.13"
 # Local catalog cache (sources + categories/streams). Bundled so we compile
 # SQLite from source and don't depend on a system libsqlite3.
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 # `spawn_blocking` for the synchronous catalog calls; runs on Tauri's runtime.
 tokio = { version = "1", features = ["rt"] }
 tracing = "0.1"
