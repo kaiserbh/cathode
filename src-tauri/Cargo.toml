@@ -28,7 +28,7 @@ cathode-core = { path = "../crates/core" }
 reqwest = "0.13"
 # Local catalog cache (sources + categories/streams). Bundled so we compile
 # SQLite from source and don't depend on a system libsqlite3.
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 # `spawn_blocking` for the synchronous catalog calls; runs on Tauri's runtime.
 tokio = { version = "1", features = ["rt"] }
 tracing = "0.1"
@@ -80,14 +80,14 @@ khronos-egl = { version = "6", features = ["dynamic"] }
 # and X11 (GLX) because GtkGLArea selects the GL backend itself.
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
-glib = "0.18"
+glib = "0.22"
 # Wake the GTK main loop (queue_render) from mpv's update callback, which fires on
 # an arbitrary thread. `MainContext::channel` is deprecated in glib 0.18, so we use
 # an async channel driven by `glib::spawn_future_local`.
 async-channel = "2"
 # dlopen libepoxy.so.0 (GTK's GL loader) to resolve GL symbols for the mpv render
 # get_proc_address resolver and the framebuffer query.
-libloading = "0.8"
+libloading = "0.9"
 # setlocale(LC_NUMERIC, "C") before mpv_create — GTK sets the user locale during
 # init, which makes libmpv's mpv_create() return NULL.
 libc = "0.2"
