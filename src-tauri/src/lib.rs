@@ -156,6 +156,7 @@ pub fn run() {
             commands::playback::set_volume,
             commands::playback::set_mute,
             commands::playback::toggle_fullscreen,
+            commands::playback::set_fullscreen,
             commands::logs::get_logs,
             commands::logs::clear_logs,
             commands::logs::set_log_level

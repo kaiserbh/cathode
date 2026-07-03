@@ -137,7 +137,15 @@ pub fn PlayerOverlay(
                         on_set_volume.call(v);
                         show_hud.call(Hud::Volume(v));
                     }
-                    Key::Escape => on_stop.call(()),
+                    Key::Escape => {
+                        if fullscreen {
+                            // Leave fullscreen but keep playing; a second Escape
+                            // (now windowed) stops, as before.
+                            on_toggle_fullscreen.call(());
+                        } else {
+                            on_stop.call(());
+                        }
+                    }
                     _ => {}
                 }
             },

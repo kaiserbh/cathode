@@ -265,6 +265,17 @@ pub async fn toggle_fullscreen() -> Result<bool, AppError> {
     call("toggle_fullscreen", &NoArgs {}).await
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FullscreenArgs {
+    fullscreen: bool,
+}
+
+/// Set the window's fullscreen state explicitly.
+pub async fn set_fullscreen(fullscreen: bool) -> Result<(), AppError> {
+    call_unit("set_fullscreen", &FullscreenArgs { fullscreen }).await
+}
+
 /// Current feature settings (favorites/history toggles).
 pub async fn get_settings() -> Result<Settings, AppError> {
     call("get_settings", &NoArgs {}).await
