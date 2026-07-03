@@ -80,7 +80,7 @@ khronos-egl = { version = "6", features = ["dynamic"] }
 # and X11 (GLX) because GtkGLArea selects the GL backend itself.
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
-glib = "0.18"
+glib = "0.22"
 # Wake the GTK main loop (queue_render) from mpv's update callback, which fires on
 # an arbitrary thread. `MainContext::channel` is deprecated in glib 0.18, so we use
 # an async channel driven by `glib::spawn_future_local`.
