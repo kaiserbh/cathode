@@ -87,7 +87,7 @@ glib = "0.22"
 async-channel = "2"
 # dlopen libepoxy.so.0 (GTK's GL loader) to resolve GL symbols for the mpv render
 # get_proc_address resolver and the framebuffer query.
-libloading = "0.8"
+libloading = "0.9"
 # setlocale(LC_NUMERIC, "C") before mpv_create — GTK sets the user locale during
 # init, which makes libmpv's mpv_create() return NULL.
 libc = "0.2"
