@@ -6,3 +6,4 @@ components = ["rustfmt", "clippy"]
 # The Dioxus frontend compiles to WebAssembly; listing the target here means
 # `rustup` installs it automatically for contributors and CI.
 targets = ["wasm32-unknown-unknown"]
+profile = "default"

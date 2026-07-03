@@ -12,6 +12,9 @@ pub mod macos;
 #[cfg(target_os = "windows")]
 pub mod windows;
 
+#[cfg(target_os = "linux")]
+pub mod linux;
+
 use cathode_core::error::AppError;
 use libmpv2::Mpv;
 
@@ -35,6 +38,16 @@ fn err(context: &str, e: impl std::fmt::Display) -> AppError {
 /// for the app's lifetime, yielding a `&'static Mpv` shared by [`Player`] and the
 /// platform video surface.
 pub fn create_mpv() -> Result<&'static Mpv, AppError> {
+    // libmpv's `mpv_create()` requires the `LC_NUMERIC` locale to be "C" and returns
+    // NULL otherwise. On Linux, GTK calls `setlocale(LC_ALL, "")` during init, leaving
+    // `LC_NUMERIC` as the user's locale by the time this runs in the Tauri setup hook,
+    // so reset it first. GLib/GTK themselves expect `LC_NUMERIC=C`, and the WASM UI
+    // formats numbers itself, so this is safe app-wide.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr());
+    }
+
     let mpv = Mpv::with_initializer(|init| {
         // Render through the render API; mpv must not open its own window.
         init.set_property("vo", "libmpv")?;

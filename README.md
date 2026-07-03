@@ -17,21 +17,21 @@ Because it's Rust on both sides, the same `Stream`, `Category`, and `Programme` 
 
 ## Platform support
 
-Windows x64 and macOS (Apple Silicon and Intel) work today. Linux isn't there yet: the core and UI compile, but there's no native video surface, so video won't render. See the [roadmap](#roadmap).
+Windows x64, macOS (Apple Silicon), and Linux (Wayland and X11).
 
 | Platform | Notes |
 | --- | --- |
 | Windows x64 | libmpv and ANGLE are vendored in the repo (Git LFS), so there's no extra setup. |
-| macOS (Apple Silicon / Intel) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. |
-| Linux | Not yet. It compiles, but there's no video surface. |
+| macOS (Apple Silicon) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. Intel Macs aren't shipped as binaries (GitHub retired the Intel runner); build from source. |
+| Linux (Wayland / X11) | Released as an **AppImage** and a **.deb**, both built against the distro's libmpv. The AppImage targets recent distributions (glibc 2.39+, e.g. Ubuntu 24.04 / current rolling releases). Arch users build from source (see [Install](#install)). |
 
-The released binaries aren't code-signed yet, so macOS warns through Gatekeeper and Windows through SmartScreen. The [install](#install) section explains how to get past that.
+The released binaries aren't code-signed, so macOS warns through Gatekeeper (it may even say the app is *"damaged"* — it isn't) and Windows through SmartScreen. The [install](#install) section explains how to get past that.
 
 ## Features
 
-- Xtream Codes accounts: live TV, movies, and series with seasons and episodes. You can save several accounts (with a recently-used list), and there's an incognito mode that doesn't keep history. Plain M3U/M3U8 playlists aren't supported yet (see the [roadmap](#roadmap)).
-- Programme guide (EPG): an XMLTV parser feeds a now/next view and a scrollable timeline, cached in SQLite. The guide grid is virtualized, and clicking a programme opens a detail popover.
-- Playback through libmpv's render API: play, pause, resume, stop, volume, mute, fullscreen, and hardware decoding (`hwdec=auto-safe`). Video draws on a native GL surface behind the transparent webview (an `NSOpenGLView` on macOS, an ANGLE EGL/Direct3D 11 surface on Windows), with a small playback HUD.
+- Sources: Xtream Codes accounts (live TV, movies, and series with seasons and episodes) and plain M3U/M3U8 playlists (loaded by URL or local file, no account required — every entry is a live channel grouped by `group-title`). You can save several sources of either kind (with a recently-used list), and there's an incognito mode that doesn't keep history.
+- Programme guide (EPG): an XMLTV parser feeds a now/next view and a scrollable timeline, cached in SQLite. Xtream uses the account's `xmltv.php`; M3U playlists pull the (optionally gzipped) XMLTV URLs declared in their `#EXTM3U` header — auto-detected into an editable field and trimmed to the channels the playlist carries. The guide grid is virtualized, and clicking a programme opens a detail popover.
+- Playback through libmpv's render API: play, pause, resume, stop, volume, mute, fullscreen, and hardware decoding (`hwdec=auto-safe`). Video draws on a native GL surface behind the transparent webview (an `NSOpenGLView` on macOS, an ANGLE EGL/Direct3D 11 surface on Windows, a `GtkGLArea` on Linux), with a small playback HUD.
 - Local catalog: SQLite caches categories, streams, and programmes. Favorites and watch history use stable IDs (an xxhash3 of the source plus the provider's own id) so they survive a re-sync and don't break when a provider reorders its list.
 - UI built with Dioxus, the [dioxus-primitives](https://github.com/DioxusLabs/components) components, and [Lucide](https://lucide.dev) icons: tabs for Live, Movies, Series, Favorites, and History, plus search, series drill-down, a settings panel, and a logs panel whose level you can change at runtime.
 
@@ -61,7 +61,38 @@ There's one normalized model. Every source produces the same `Stream`, `Category
 Download the latest build from the [releases page](https://github.com/kaiserbh/cathode/releases).
 
 - Windows: run the `.msi` (or the NSIS `.exe`). If SmartScreen warns, choose "More info", then "Run anyway".
-- macOS: install mpv first with `brew install mpv`, then open the `.dmg`. If Gatekeeper blocks it on first launch, right-click the app and choose Open, or run `xattr -dr com.apple.quarantine /Applications/Cathode.app`. Pick the Apple Silicon or Intel build for your Mac.
+- macOS (Apple Silicon): install mpv first with `brew install mpv`, then open the `.dmg` and drag Cathode to Applications. The build isn't notarized, so on first launch macOS says **"Cathode is damaged and can't be opened"** — it isn't damaged, that's just the message macOS shows for unsigned downloaded apps. Clear the quarantine flag to run it:
+
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/Cathode.app
+  ```
+
+  (Right-clicking and choosing *Open* doesn't clear this particular message.) Intel Macs aren't published as binaries; build from source.
+- Linux: download the `.AppImage` (`chmod +x` it and run), or the `.deb` (`sudo apt install ./Cathode_*.deb`). Both need the system libmpv at runtime; on Debian/Ubuntu the `.deb` pulls it in, and for the AppImage install `mpv` (or `libmpv2`) yourself. The AppImage targets recent distributions (glibc 2.39+).
+
+### Arch Linux
+
+Arch isn't covered by the release binaries, so Cathode is built from source. The package is on the AUR; install it with an AUR helper, which resolves the build dependencies (including `tauri-cli`) for you:
+
+```sh
+paru -S cathode   # or: yay -S cathode
+```
+
+No AUR helper? The one-liner installs the dependencies, builds, and installs Cathode plus a launcher entry:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kaiserbh/cathode/main/scripts/install-arch.sh | sh
+```
+
+Or build the checked-in [PKGBUILD](./packaging/arch/PKGBUILD) directly with `makepkg` (no AUR helper needed; it builds its own pinned `tauri-cli`):
+
+```sh
+git clone https://github.com/kaiserbh/cathode
+cd cathode/packaging/arch
+makepkg -si
+```
+
+Either way the runtime dependencies are `mpv` (provides libmpv), `gtk3`, and `webkit2gtk-4.1`.
 
 ## Building from source
 
@@ -93,7 +124,7 @@ git clone https://github.com/kaiserbh/cathode
 
 `build.rs` points the linker at the vendored `mpv.lib` and copies the runtime DLLs next to the built binaries. If you see `LINK : fatal error LNK1181: cannot open input file 'mpv.lib'`, the LFS files weren't fetched, so run `git lfs pull`.
 
-On Linux it compiles, but video won't render yet because there's no native surface. See the [roadmap](#roadmap).
+On Linux, install the system libraries before building (nothing is vendored): libmpv, GTK 3, and WebKitGTK, plus their `-dev` packages. On Arch: `sudo pacman -S mpv gtk3 webkit2gtk-4.1`. On Debian/Ubuntu: `sudo apt install libmpv-dev libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev`. The build links `libmpv.so.2` (mpv 0.37 or newer), so on older releases that still ship mpv 0.34 you'll need a newer libmpv. The GL entry points are resolved at runtime through `libEGL`/`libGL` (shipped with Mesa), so there's no libepoxy dependency.
 
 ### Common commands
 
@@ -109,13 +140,10 @@ On Linux it compiles, but video won't render yet because there's no native surfa
 
 Roughly in order of priority. Contributions to any of these are welcome.
 
-- Plain M3U/M3U8 playlists: load a playlist by URL or file, with no Xtream account required (`cathode-core::sources::m3u`, deriving stable IDs from `tvg-id` or name plus url).
-- Linux support: a native video surface (X11/Wayland through the libmpv render API), then Linux in the release matrix.
 - Bundle libmpv into the macOS `.app` so `brew install mpv` is no longer required.
-- Code signing and notarization (Apple notarization, Windows Authenticode) so releases launch without warnings.
 - Quality-of-life work: better search and filtering, keyboard shortcuts, resume-from-position, a configurable default volume and `hwdec`, and theming.
 - More EPG: catch-up/archive, reminders, and channel logos.
-- Maybe later: an in-app updater, Windows ARM64, and Linux Flatpak/AppImage packaging.
+- Maybe later: an in-app updater, Windows ARM64, a Linux Flatpak, and an AUR package.
 
 ## Contributing
 
@@ -130,9 +158,9 @@ Pull requests are welcome. A few things worth knowing:
 Releases come straight from the commit history:
 
 1. When commits land on `main`, release-please opens (and keeps updating) a "chore: release X.Y.Z" PR that bumps the version everywhere and updates `CHANGELOG.md`.
-2. Merging that PR tags `vX.Y.Z` and publishes a GitHub release, which kicks off [`release-build.yml`](./.github/workflows/release-build.yml) to build and upload the macOS and Windows bundles.
+2. Merging that PR tags `vX.Y.Z` and publishes a GitHub release, which kicks off [`release-build.yml`](./.github/workflows/release-build.yml) to build and upload the macOS, Windows, and Linux (AppImage + `.deb`) bundles, and [`aur-publish.yml`](./.github/workflows/aur-publish.yml) to push the bumped [PKGBUILD](./packaging/arch/PKGBUILD) to the AUR. The PKGBUILD's `pkgver` is part of the release-please bump (see `release-please-config.json`), so the AUR always tracks the latest release.
 
-This needs two one-time repo secrets, `APP_ID` and `APP_PRIVATE_KEY`, for a GitHub App with `contents:write` and `pull_requests:write`. A release created by the default `GITHUB_TOKEN` won't trigger the build workflow, which is why the App is needed.
+This needs three one-time repo secrets: `APP_ID` and `APP_PRIVATE_KEY` for a GitHub App with `contents:write` and `pull_requests:write` (a release created by the default `GITHUB_TOKEN` won't trigger the build workflows, which is why the App is needed), plus `AUR_SSH_PRIVATE_KEY` (an SSH key whose public half is registered on the AUR account) for the AUR push.
 
 ## License
 

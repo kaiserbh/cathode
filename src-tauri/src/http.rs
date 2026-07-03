@@ -34,6 +34,27 @@ impl ReqwestTransport {
     }
 }
 
+impl ReqwestTransport {
+    /// Fetch the raw bytes at a URL. Used for content the text path can't carry
+    /// safely — notably gzipped XMLTV guides (`*.xml.gz`), which the caller gunzips.
+    pub async fn get_bytes(&self, url: &str) -> Result<Vec<u8>, CoreError> {
+        tracing::debug!(url = %redact::secrets(url), "GET bytes");
+        let response = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| CoreError::network("request", redact::secrets(&e.to_string())))?
+            .error_for_status()
+            .map_err(|e| CoreError::network("response status", redact::secrets(&e.to_string())))?;
+        response
+            .bytes()
+            .await
+            .map(|b| b.to_vec())
+            .map_err(|e| CoreError::network("body", redact::secrets(&e.to_string())))
+    }
+}
+
 impl Transport for ReqwestTransport {
     fn get_text(&self, url: &str) -> impl Future<Output = Result<String, CoreError>> + Send {
         tracing::debug!(url = %redact::secrets(url), "xtream GET");

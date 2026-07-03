@@ -64,6 +64,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
         .manage(log_store)
         .manage(log_control)
@@ -98,6 +99,18 @@ pub fn run() {
                         }
                         None => tracing::error!("no main window to attach video surface"),
                     }
+
+                    // Linux: a GtkGLArea behind the transparent WebKitGTK webview, fed by
+                    // mpv's render API (EGL on Wayland, GLX on X11 — GtkGLArea picks one).
+                    #[cfg(target_os = "linux")]
+                    match app.get_webview_window("main") {
+                        Some(window) => {
+                            if let Err(e) = playback::linux::attach(&window, mpv) {
+                                tracing::error!("failed to attach video surface: {}", e.message);
+                            }
+                        }
+                        None => tracing::error!("no main window to attach video surface"),
+                    }
                 }
                 Err(e) => tracing::error!("failed to initialize player: {}", e.message),
             }
@@ -124,6 +137,8 @@ pub fn run() {
             commands::sources::get_series_info,
             commands::sources::saved_sources,
             commands::sources::forget_source,
+            commands::sources::detect_playlist_epg,
+            commands::dialog::pick_playlist_file,
             commands::library::get_settings,
             commands::library::set_settings,
             commands::library::list_favorites,
