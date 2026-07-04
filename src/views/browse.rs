@@ -486,8 +486,18 @@ pub fn Browse() -> Element {
                 },
                 on_stop: move |_| {
                     playing.set(None);
+                    // Stopping unmounts the overlay (and its fullscreen button), so
+                    // also drop native fullscreen — otherwise a Windows user is left
+                    // in a chrome-less fullscreen window with no way to exit.
+                    let was_fullscreen = fullscreen();
+                    if was_fullscreen {
+                        fullscreen.set(false);
+                    }
                     spawn(async move {
                         let _ = bindings::stop().await;
+                        if was_fullscreen {
+                            let _ = bindings::set_fullscreen(false).await;
+                        }
                     });
                 },
                 on_set_volume: move |v: u8| {

@@ -80,3 +80,14 @@ pub fn toggle_fullscreen(window: tauri::WebviewWindow) -> Result<bool, AppError>
     })?;
     Ok(fullscreen)
 }
+
+/// Set the main window's fullscreen state explicitly. Used to force fullscreen off
+/// when playback stops, so the user is never stranded in a chrome-less fullscreen
+/// window with no way to exit (native fullscreen hides the title bar on Windows).
+#[tauri::command]
+pub fn set_fullscreen(window: tauri::WebviewWindow, fullscreen: bool) -> Result<(), AppError> {
+    window.set_fullscreen(fullscreen).map_err(|e| AppError {
+        code: "playback".to_string(),
+        message: format!("set fullscreen: {e}"),
+    })
+}
