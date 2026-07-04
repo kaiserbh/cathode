@@ -61,11 +61,13 @@ body {
 .cathode-range::-webkit-slider-runnable-track {
     height: 0.375rem;
     border-radius: 9999px;
-    /* Sky fill up to the thumb; --vol is the 0–100% position set inline by the caller. */
+    /* Sky fill up to the thumb; --vol is the 0–100% position set inline by the caller.
+       --track colours the unfilled remainder (defaults to the translucent white used on
+       the dark player bar; panels on a light background override it to a neutral grey). */
     background: linear-gradient(
         to right,
         #38bdf8 var(--vol, 0%),
-        rgba(255, 255, 255, 0.3) var(--vol, 0%)
+        var(--track, rgba(255, 255, 255, 0.3)) var(--vol, 0%)
     );
 }
 .cathode-range::-webkit-slider-thumb {
@@ -87,7 +89,7 @@ body {
     background: linear-gradient(
         to right,
         #38bdf8 var(--vol, 0%),
-        rgba(255, 255, 255, 0.3) var(--vol, 0%)
+        var(--track, rgba(255, 255, 255, 0.3)) var(--vol, 0%)
     );
 }
 .cathode-range::-moz-range-thumb {

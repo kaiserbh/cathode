@@ -473,6 +473,7 @@ pub fn Browse() -> Element {
                 volume: s.volume,
                 muted: s.muted,
                 fullscreen: fullscreen(),
+                hint_seen: s.shortcuts_hint_seen,
                 on_toggle_pause: move |_| {
                     let now_paused = !paused();
                     paused.set(now_paused);
@@ -523,6 +524,11 @@ pub fn Browse() -> Element {
                             fullscreen.set(fs);
                         }
                     });
+                },
+                on_hint_seen: move |_| {
+                    let mut s = settings();
+                    s.shortcuts_hint_seen = true;
+                    save_settings.call(s);
                 },
             }
         };
@@ -616,6 +622,9 @@ pub fn Browse() -> Element {
                         };
                         let pane_epg = if is_live { epg() } else { HashMap::new() };
                         let pane_prog = if is_live { programmes() } else { HashMap::new() };
+                        // Remount (and so reset the in-list filter) when the tab or
+                        // selected category changes.
+                        let cat_key = selected().map(|c| c.0).unwrap_or_default();
                         rsx! {
                             div {
                                 class: "flex flex-col md:flex-row flex-1 min-h-0",
@@ -637,6 +646,7 @@ pub fn Browse() -> Element {
                                         Spinner {}
                                     } else {
                                         ChannelPane {
+                                            key: "{current_tab:?}-{cat_key}",
                                             view,
                                             streams: streams(),
                                             favorites_enabled,
@@ -665,6 +675,7 @@ pub fn Browse() -> Element {
                                 }
                             } else {
                                 ChannelPane {
+                                    key: "{current_tab:?}",
                                     view: channel_view,
                                     streams: favorites(),
                                     favorites_enabled,
@@ -691,6 +702,7 @@ pub fn Browse() -> Element {
                                 }
                             } else {
                                 ChannelPane {
+                                    key: "{current_tab:?}",
                                     view: channel_view,
                                     streams: history(),
                                     favorites_enabled,
@@ -761,6 +773,11 @@ pub fn Browse() -> Element {
                 on_set_view: move |v: ChannelView| {
                     let mut s = settings();
                     s.channel_view = v;
+                    save_settings.call(s);
+                },
+                on_set_volume: move |v: u8| {
+                    let mut s = settings();
+                    s.volume = v;
                     save_settings.call(s);
                 },
                 on_toggle_incognito: move |v| incognito.set(v),
