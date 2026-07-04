@@ -50,6 +50,9 @@ pub struct Settings {
     pub muted: bool,
     /// Debug logging verbosity. `Off` (the default) disables capture entirely.
     pub log_level: LogLevel,
+    /// Whether the one-time "Press ? for shortcuts" hint has been shown. Set the
+    /// first time the player opens so the hint never repeats.
+    pub shortcuts_hint_seen: bool,
 }
 
 impl Default for Settings {
@@ -62,6 +65,7 @@ impl Default for Settings {
             volume: 100,
             muted: false,
             log_level: LogLevel::Off,
+            shortcuts_hint_seen: false,
         }
     }
 }
@@ -107,6 +111,7 @@ mod tests {
         assert_eq!(s.volume, 100);
         assert!(!s.muted);
         assert_eq!(s.log_level, LogLevel::Off);
+        assert!(!s.shortcuts_hint_seen);
     }
 
     #[test]
@@ -119,6 +124,7 @@ mod tests {
             volume: 42,
             muted: true,
             log_level: LogLevel::Debug,
+            shortcuts_hint_seen: true,
         };
         let json = serde_json::to_string(&s).unwrap();
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), s);
@@ -149,5 +155,6 @@ mod tests {
         assert_eq!(partial.volume, 100);
         assert!(!partial.muted);
         assert_eq!(partial.log_level, LogLevel::Off);
+        assert!(!partial.shortcuts_hint_seen);
     }
 }
