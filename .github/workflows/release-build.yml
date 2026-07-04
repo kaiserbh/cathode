@@ -51,14 +51,17 @@ jobs:
         with:
           key: ${{ matrix.os }}-${{ matrix.arch }}-release
 
-      - name: Install mpv (macOS)
+      - name: Install mpv + packaging tools (macOS)
         if: runner.os == 'macOS'
         run: |
           # GitHub's macOS runners preinstall third-party taps (aws/tap,
           # azure/bicep) we don't use; drop them so Homebrew doesn't warn about
           # untrusted taps. mpv comes from the trusted core tap.
           brew untap aws/tap azure/bicep 2>/dev/null || true
-          brew install mpv
+          # mpv provides the libmpv the app links against; dylibbundler copies its
+          # dylib closure into the .app; create-dmg packages the fixed app. See
+          # scripts/package-macos.sh.
+          brew install mpv dylibbundler create-dmg
 
       # Linux links the system libmpv (libmpv-dev) and builds against GTK3 +
       # WebKitGTK; patchelf/librsvg are needed by the AppImage bundler.
@@ -85,13 +88,31 @@ jobs:
           crate: tauri-cli
           version: "^2"
 
+      # macOS is packaged by scripts/package-macos.sh (below), which bundles
+      # libmpv's dylib closure into the .app so end users don't need `brew install
+      # mpv`. tauri-action handles Windows and Linux.
       - uses: tauri-apps/tauri-action@v1
+        if: runner.os != 'macOS'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Build the AppImage without FUSE on the runner (appimagetool runs by
-          # self-extracting instead of mounting). Harmless on macOS/Windows.
+          # self-extracting instead of mounting). Harmless on Windows.
           APPIMAGE_EXTRACT_AND_RUN: 1
         with:
           # Upload bundles to the existing Release rather than creating a new one.
           releaseId: ${{ github.event.release.id }}
           args: ${{ matrix.args }}
+
+      - name: Package + upload macOS bundle (libmpv bundled)
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Build the .app, copy libmpv's dylib closure into it, ad-hoc re-sign,
+          # and package a .dmg; then upload it to the same Release tauri-action
+          # publishes the other platforms to.
+          bash scripts/package-macos.sh ${{ matrix.args }}
+          dmg=$(find target src-tauri/target -type f -path '*bundle/dmg/Cathode_*.dmg' 2>/dev/null | head -n1)
+          [ -n "$dmg" ] || { echo "::error::package-macos.sh produced no .dmg"; exit 1; }
+          echo "Uploading $dmg"
+          gh release upload "${{ github.event.release.tag_name }}" "$dmg" --clobber
