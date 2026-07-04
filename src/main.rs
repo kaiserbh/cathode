@@ -3,6 +3,7 @@ mod bindings;
 mod clipboard;
 mod components;
 mod epg;
+mod filter;
 mod format;
 mod ui;
 mod views;
