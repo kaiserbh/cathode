@@ -22,7 +22,7 @@ Windows x64, macOS (Apple Silicon), and Linux (Wayland and X11).
 | Platform | Notes |
 | --- | --- |
 | Windows x64 | libmpv and ANGLE are vendored in the repo (Git LFS), so there's no extra setup. |
-| macOS (Apple Silicon) | Needs `brew install mpv` for now; bundling libmpv into the `.app` is on the roadmap. Intel Macs aren't shipped as binaries (GitHub retired the Intel runner); build from source. |
+| macOS (Apple Silicon) | libmpv and its dylib closure are bundled into the `.app`, so there's no extra setup. Intel Macs aren't shipped as binaries (GitHub retired the Intel runner); build from source. |
 | Linux (Wayland / X11) | Released as an **AppImage** and a **.deb**, both built against the distro's libmpv. The AppImage targets recent distributions (glibc 2.39+, e.g. Ubuntu 24.04 / current rolling releases). Arch users build from source (see [Install](#install)). |
 
 The released binaries aren't code-signed, so macOS warns through Gatekeeper (it may even say the app is *"damaged"* — it isn't) and Windows through SmartScreen. The [install](#install) section explains how to get past that.
@@ -61,7 +61,7 @@ There's one normalized model. Every source produces the same `Stream`, `Category
 Download the latest build from the [releases page](https://github.com/kaiserbh/cathode/releases).
 
 - Windows: run the `.msi` (or the NSIS `.exe`). If SmartScreen warns, choose "More info", then "Run anyway".
-- macOS (Apple Silicon): install mpv first with `brew install mpv`, then open the `.dmg` and drag Cathode to Applications. The build isn't notarized, so on first launch macOS says **"Cathode is damaged and can't be opened"** — it isn't damaged, that's just the message macOS shows for unsigned downloaded apps. Clear the quarantine flag to run it:
+- macOS (Apple Silicon): open the `.dmg` and drag Cathode to Applications — libmpv is bundled inside the app, so there's nothing else to install. The build isn't notarized, so on first launch macOS says **"Cathode is damaged and can't be opened"** — it isn't damaged, that's just the message macOS shows for unsigned downloaded apps. Clear the quarantine flag to run it:
 
   ```sh
   xattr -dr com.apple.quarantine /Applications/Cathode.app
@@ -112,7 +112,16 @@ On macOS:
 brew install mpv
 ```
 
-`libmpv2-sys` finds it through pkg-config, and the build script adds the Homebrew lib directory to the linker search path. That's all you need.
+`libmpv2-sys` finds it through pkg-config, and the build script adds the Homebrew lib directory to the linker search path. That's all you need to build and run locally (`cargo tauri dev` / `cargo tauri build`).
+
+A locally built `.app` still resolves libmpv from its absolute Homebrew path, so it only runs on machines that have Homebrew mpv. To produce a **self-contained, distributable** `.app` + `.dmg` — libmpv and its entire dylib closure copied into `Contents/Frameworks`, install names rewritten, ad-hoc re-signed — run:
+
+```sh
+brew install dylibbundler create-dmg   # once
+scripts/package-macos.sh
+```
+
+That's exactly what CI runs to build the macOS release; the resulting app needs no Homebrew mpv at runtime.
 
 On Windows (x64), libmpv and ANGLE are vendored under `src-tauri/vendor/mpv/windows-x64/`: the 112 MB `libmpv-2.dll` through Git LFS, a generated `mpv.lib` import library, and ANGLE's `libEGL.dll` and `libGLESv2.dll`. So the only thing you need is Git LFS:
 
@@ -140,7 +149,6 @@ On Linux, install the system libraries before building (nothing is vendored): li
 
 Roughly in order of priority. Contributions to any of these are welcome.
 
-- Bundle libmpv into the macOS `.app` so `brew install mpv` is no longer required.
 - Quality-of-life work: better search and filtering, keyboard shortcuts, resume-from-position, a configurable default volume and `hwdec`, and theming.
 - More EPG: catch-up/archive, reminders, and channel logos.
 - Maybe later: an in-app updater, Windows ARM64, a Linux Flatpak, and an AUR package.
