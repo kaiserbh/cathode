@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/kaiserbh/cathode/compare/v0.5.4...v0.5.5) (2026-07-04)
+
+
+### Bug Fixes
+
+* **ui:** escape fullscreen on windows ([#38](https://github.com/kaiserbh/cathode/issues/38)) ([dde591a](https://github.com/kaiserbh/cathode/commit/dde591a55dd9e39c67b579c12da7898f592234ab))
+
 ## [0.5.4](https://github.com/kaiserbh/cathode/compare/v0.5.3...v0.5.4) (2026-06-26)
 
 

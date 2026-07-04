@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "cathode"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "async-channel",
  "cathode-core",
@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "cathode-core"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "chrono",
  "percent-encoding",
@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "cathode-ui"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "cathode-core",
  "dioxus",
