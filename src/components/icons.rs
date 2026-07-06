@@ -35,6 +35,7 @@ icon!(Series => MonitorPlay);
 icon!(Search => Search);
 icon!(Bug => Bug);
 icon!(History => History);
+icon!(Keyboard => Keyboard);
 
 /// Favorite star. `filled` solidifies it (the colour comes from the caller's text
 /// colour, since Lucide draws with `currentColor`).

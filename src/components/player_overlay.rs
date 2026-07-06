@@ -9,7 +9,7 @@ use gloo_timers::future::TimeoutFuture;
 use js_sys::Date;
 
 use crate::components::icons::{
-    FullscreenEnter, FullscreenExit, Pause, Play, Stop, VolumeHigh, VolumeMuted,
+    FullscreenEnter, FullscreenExit, Keyboard, Pause, Play, Stop, VolumeHigh, VolumeMuted,
 };
 use crate::format::hhmm;
 
@@ -20,6 +20,8 @@ const ICON: &str = "h-5 w-5";
 const HUD_ICON: &str = "h-10 w-10";
 /// How long the shortcut HUD stays on screen, in milliseconds.
 const HUD_MS: u32 = 800;
+/// How long the one-time "Press ? for shortcuts" hint stays on screen, in milliseconds.
+const HINT_MS: u32 = 4000;
 
 /// A transient, centered overlay shown when a playback shortcut fires.
 #[derive(Clone, Copy, PartialEq)]
@@ -38,11 +40,16 @@ pub fn PlayerOverlay(
     volume: u8,
     muted: bool,
     fullscreen: bool,
+    /// Whether the one-time "Press ? for shortcuts" hint has already been shown.
+    hint_seen: bool,
     on_toggle_pause: EventHandler<()>,
     on_stop: EventHandler<()>,
     on_set_volume: EventHandler<u8>,
     on_toggle_mute: EventHandler<()>,
     on_toggle_fullscreen: EventHandler<()>,
+    /// Fired once, the first time the player opens, so the caller can persist that
+    /// the shortcut hint was shown.
+    on_hint_seen: EventHandler<()>,
 ) -> Element {
     let mut visible = use_signal(|| true);
     let mut last_active = use_signal(Date::now);
@@ -85,6 +92,23 @@ pub fn PlayerOverlay(
         }
     });
 
+    // The shortcuts cheatsheet, toggled by `?` or the keyboard button.
+    let mut show_help = use_signal(|| false);
+
+    // One-time discoverability hint: the first time the player ever opens, briefly
+    // show "Press ? for shortcuts", then persist that it was shown so it never
+    // repeats (even if the user missed it).
+    let mut hint = use_signal(|| false);
+    use_future(move || async move {
+        if hint_seen {
+            return;
+        }
+        hint.set(true);
+        on_hint_seen.call(());
+        TimeoutFuture::new(HINT_MS).await;
+        hint.set(false);
+    });
+
     let bar_visibility = if visible() {
         "opacity-100"
     } else {
@@ -105,13 +129,22 @@ pub fn PlayerOverlay(
                     visible.set(true);
                 }
             },
-            // Click the video (anywhere not on the bar) toggles play/pause.
+            // Click the video (anywhere not on the bar) toggles play/pause — unless the
+            // shortcuts cheatsheet is open, in which case the click just dismisses it.
             onclick: move |_| {
+                if show_help() {
+                    show_help.set(false);
+                    return;
+                }
                 on_toggle_pause.call(());
                 show_hud.call(if paused { Hud::Playing } else { Hud::Paused });
             },
             onkeydown: move |e| {
                 match e.key() {
+                    Key::Character(c) if c == "?" => {
+                        e.prevent_default();
+                        show_help.set(!show_help());
+                    }
                     Key::Character(c) if c == " " => {
                         e.prevent_default();
                         on_toggle_pause.call(());
@@ -138,7 +171,9 @@ pub fn PlayerOverlay(
                         show_hud.call(Hud::Volume(v));
                     }
                     Key::Escape => {
-                        if fullscreen {
+                        if show_help() {
+                            show_help.set(false);
+                        } else if fullscreen {
                             // Leave fullscreen but keep playing; a second Escape
                             // (now windowed) stops, as before.
                             on_toggle_fullscreen.call(());
@@ -167,6 +202,34 @@ pub fn PlayerOverlay(
                                 class: "w-full text-center text-lg font-semibold tabular-nums",
                                 "{v}%"
                             }
+                        }
+                    }
+                }
+            }
+            // One-time discoverability hint, top-center.
+            if hint() {
+                div {
+                    class: "pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 rounded-full \
+                        bg-black/60 px-4 py-1.5 text-sm text-white backdrop-blur-sm",
+                    "Press ? for shortcuts"
+                }
+            }
+            // Shortcuts cheatsheet. The root's onclick/Escape dismiss it; clicks on the
+            // card itself are swallowed so they don't close it or reach the video.
+            if show_help() {
+                div {
+                    class: "absolute inset-0 flex items-center justify-center",
+                    div {
+                        class: "w-80 rounded-2xl bg-black/70 p-5 text-white backdrop-blur-sm",
+                        onclick: move |e| e.stop_propagation(),
+                        h3 { class: "mb-3 text-sm font-semibold", "Keyboard shortcuts" }
+                        div { class: "flex flex-col gap-2",
+                            ShortcutRow { keys: "Space", action: "Play / Pause" }
+                            ShortcutRow { keys: "M", action: "Mute / Unmute" }
+                            ShortcutRow { keys: "↑ / ↓", action: "Volume up / down" }
+                            ShortcutRow { keys: "F", action: "Fullscreen" }
+                            ShortcutRow { keys: "Esc", action: "Exit fullscreen / Stop" }
+                            ShortcutRow { keys: "?", action: "Toggle this help" }
                         }
                     }
                 }
@@ -239,6 +302,12 @@ pub fn PlayerOverlay(
                     }
                     button {
                         class: BTN,
+                        title: "Keyboard shortcuts",
+                        onclick: move |_| show_help.set(!show_help()),
+                        Keyboard { class: ICON }
+                    }
+                    button {
+                        class: BTN,
                         title: if fullscreen { "Exit fullscreen" } else { "Fullscreen" },
                         onclick: move |_| on_toggle_fullscreen.call(()),
                         if fullscreen {
@@ -255,3 +324,17 @@ pub fn PlayerOverlay(
 
 const BTN: &str = "rounded-full p-2 text-white hover:bg-white/10 focus:outline-none \
     focus:ring-2 focus:ring-sky-400";
+
+/// One row of the shortcuts cheatsheet: an action and the key(s) that trigger it.
+#[component]
+fn ShortcutRow(keys: String, action: String) -> Element {
+    rsx! {
+        div { class: "flex items-center justify-between gap-4",
+            span { class: "text-sm text-white/80", {action} }
+            kbd {
+                class: "rounded bg-white/15 px-2 py-0.5 text-xs font-medium",
+                {keys}
+            }
+        }
+    }
+}

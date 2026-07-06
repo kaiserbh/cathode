@@ -18,6 +18,7 @@ pub fn SettingsPanel(
     on_toggle_history: EventHandler<bool>,
     on_toggle_epg: EventHandler<bool>,
     on_set_view: EventHandler<ChannelView>,
+    on_set_volume: EventHandler<u8>,
     on_toggle_incognito: EventHandler<bool>,
     on_clear_history: EventHandler<()>,
     on_close: EventHandler<()>,
@@ -85,6 +86,38 @@ pub fn SettingsPanel(
                             view: ChannelView::Guide,
                             current: settings.channel_view,
                             on_set_view,
+                        }
+                    }
+                }
+                div {
+                    class: "flex items-center justify-between gap-4 px-5 py-4",
+                    div {
+                        span { class: "block text-sm font-medium", "Default volume" }
+                        span {
+                            class: "block text-xs text-neutral-500",
+                            "Volume applied when playback starts."
+                        }
+                    }
+                    div {
+                        class: "flex shrink-0 items-center gap-2",
+                        input {
+                            r#type: "range",
+                            min: "0",
+                            max: "100",
+                            value: "{settings.volume}",
+                            // --vol drives the fill; --track tints the remainder so the
+                            // slider reads well on the panel (not just the dark player bar).
+                            style: "--vol: {settings.volume}%; --track: rgba(120, 120, 120, 0.35)",
+                            class: "cathode-range w-32",
+                            oninput: move |e| {
+                                if let Ok(v) = e.value().parse::<u8>() {
+                                    on_set_volume.call(v);
+                                }
+                            },
+                        }
+                        span {
+                            class: "w-9 text-right text-xs tabular-nums text-neutral-500",
+                            "{settings.volume}%"
                         }
                     }
                 }
