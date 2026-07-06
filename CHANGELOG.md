@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.6](https://github.com/kaiserbh/cathode/compare/v0.5.5...v0.5.6) (2026-07-06)
+
+
+### Features
+
+* add overlay helper and some QoL ([#41](https://github.com/kaiserbh/cathode/issues/41)) ([de35fce](https://github.com/kaiserbh/cathode/commit/de35fce3a82f0e6a27b73751773da493b3a15370))
+* bundle mpv into mac release ([#40](https://github.com/kaiserbh/cathode/issues/40)) ([e5ef6bf](https://github.com/kaiserbh/cathode/commit/e5ef6bfa98bcc63f6edb78bcb5c45cde4858a4a1))
+
 ## [0.5.5](https://github.com/kaiserbh/cathode/compare/v0.5.4...v0.5.5) (2026-07-04)
 
 
