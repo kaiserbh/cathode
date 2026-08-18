@@ -3,3 +3,4 @@
 /AGENTS.md
 /CLAUDE.md
 .DS_Store
+/src-tauri/vendor/mpv/windows-x64/
