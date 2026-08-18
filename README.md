@@ -21,7 +21,7 @@ Windows x64, macOS (Apple Silicon), and Linux (Wayland and X11).
 
 | Platform | Notes |
 | --- | --- |
-| Windows x64 | libmpv and ANGLE are vendored in the repo (Git LFS), so there's no extra setup. |
+| Windows x64 | libmpv and ANGLE are bundled into the installer, so there's no extra setup. |
 | macOS (Apple Silicon) | libmpv and its dylib closure are bundled into the `.app`, so there's no extra setup. Intel Macs aren't shipped as binaries (GitHub retired the Intel runner); build from source. |
 | Linux (Wayland / X11) | Released as an **AppImage** and a **.deb**, both built against the distro's libmpv. The AppImage targets recent distributions (glibc 2.39+, e.g. Ubuntu 24.04 / current rolling releases). Arch users build from source (see [Install](#install)). |
 
@@ -100,7 +100,7 @@ You'll need:
 
 - Rust 1.85 or newer. The toolchain is pinned in [`rust-toolchain.toml`](./rust-toolchain.toml), so rustup installs the right version and the `wasm32-unknown-unknown` target for you.
 - The Dioxus CLI: `cargo install dioxus-cli@0.7.9` (or `cargo binstall dioxus-cli@0.7.9`).
-- Git LFS, for the vendored Windows libmpv DLLs.
+- On Windows only: PowerShell, to fetch the vendored libmpv before the first build (see below). It ships with Windows.
 
 ### libmpv per platform
 
@@ -123,15 +123,37 @@ scripts/package-macos.sh
 
 That's exactly what CI runs to build the macOS release; the resulting app needs no Homebrew mpv at runtime.
 
-On Windows (x64), libmpv and ANGLE are vendored under `src-tauri/vendor/mpv/windows-x64/`: the 112 MB `libmpv-2.dll` through Git LFS, a generated `mpv.lib` import library, and ANGLE's `libEGL.dll` and `libGLESv2.dll`. So the only thing you need is Git LFS:
+On Windows (x64), libmpv and ANGLE live under `src-tauri/vendor/mpv/windows-x64/`: the 112 MB `libmpv-2.dll`, a generated `mpv.lib` import library, and ANGLE's `libEGL.dll` and `libGLESv2.dll`. They aren't committed to the repo — they're published as a GitHub Release asset and fetched by a script:
 
 ```sh
-git lfs install   # once per machine
 git clone https://github.com/kaiserbh/cathode
-# already cloned without LFS? run: git lfs pull
+cd cathode
+pwsh scripts/fetch-windows-mpv.ps1   # once per clone, ~47 MB
 ```
 
-`build.rs` points the linker at the vendored `mpv.lib` and copies the runtime DLLs next to the built binaries. If you see `LINK : fatal error LNK1181: cannot open input file 'mpv.lib'`, the LFS files weren't fetched, so run `git lfs pull`.
+The script is pinned by [`scripts/mpv-windows.lock`](./scripts/mpv-windows.lock) and verifies the download's SHA-256 before extracting it. Re-running it is a no-op once the files are in place, so it's safe to put in a build alias.
+
+`build.rs` points the linker at the vendored `mpv.lib` and copies the runtime DLLs next to the built binaries. If the files are missing, the build script stops with a message telling you to run the fetch script — you shouldn't ever see the linker's `LNK1181: cannot open input file 'mpv.lib'`.
+
+These binaries used to be committed through Git LFS. LFS bills bandwidth on every download, so each Windows CI run cost ~125 MB against the quota; Release assets are free and unmetered.
+
+#### Refreshing the vendored libmpv
+
+To move to a newer libmpv, build a fresh bundle and re-pin it:
+
+```sh
+# 1. Assemble the four files into a flat zip (no directory prefix).
+zip -9 -X mpv-windows-x64.zip libmpv-2.dll libEGL.dll libGLESv2.dll mpv.lib
+sha256sum mpv-windows-x64.zip
+
+# 2. Publish it under a new tag. Pre-release so it doesn't displace the app's
+#    latest release; release-please never touches vendor-* tags.
+gh release create vendor-mpv-<date> mpv-windows-x64.zip \
+  --title "Vendored Windows libmpv + ANGLE" --prerelease \
+  --notes "Build-time dependency for the Windows target. Not a Cathode release."
+```
+
+Then update `VERSION`, `URL`, and `SHA256` in `scripts/mpv-windows.lock`. That file is the CI cache key, so bumping it invalidates the cache automatically.
 
 On Linux, install the system libraries before building (nothing is vendored): libmpv, GTK 3, and WebKitGTK, plus their `-dev` packages. On Arch: `sudo pacman -S mpv gtk3 webkit2gtk-4.1`. On Debian/Ubuntu: `sudo apt install libmpv-dev libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev`. The build links `libmpv.so.2` (mpv 0.37 or newer), so on older releases that still ship mpv 0.34 you'll need a newer libmpv. The GL entry points are resolved at runtime through `libEGL`/`libGL` (shipped with Mesa), so there's no libepoxy dependency.
 
