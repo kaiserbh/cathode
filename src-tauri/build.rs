@@ -16,12 +16,26 @@ fn main() {
     }
 
     // libmpv2-sys emits `-lmpv` with no search path. We vendor the Windows libmpv under
-    // `vendor/mpv/windows-x64` (the 112 MB DLL via Git LFS, plus a generated `mpv.lib`
-    // import library) so contributors need no manual setup beyond `git lfs`.
+    // `vendor/mpv/windows-x64` (the 112 MB DLL plus a generated `mpv.lib` import
+    // library). Those files aren't in git -- they're fetched from a GitHub Release
+    // asset by `scripts/fetch-windows-mpv.ps1`, which is free, unlike the Git LFS
+    // storage they used to live in (billed per download, on every CI checkout).
     #[cfg(target_os = "windows")]
     {
         let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let vendor = std::path::Path::new(&manifest).join("vendor/mpv/windows-x64");
+
+        // Fail here with something actionable rather than letting the linker get all
+        // the way to `LNK1181: cannot open input file 'mpv.lib'` minutes later.
+        if !vendor.join("mpv.lib").exists() {
+            panic!(
+                "Windows libmpv is not vendored in {}.\n\
+                 Run this once, from the repo root:\n\
+                 \n    pwsh scripts/fetch-windows-mpv.ps1\n",
+                vendor.display()
+            );
+        }
+
         println!("cargo:rustc-link-search=native={}", vendor.display());
         println!(
             "cargo:rerun-if-changed={}",
