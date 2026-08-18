@@ -100,7 +100,7 @@ jobs:
       # don't re-download it. The cache key tracks the pin in the lock file.
       - name: Cache vendored Windows libmpv
         if: runner.os == 'Windows'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: src-tauri/vendor/mpv/windows-x64
           key: mpv-win-x64-${{ hashFiles('scripts/mpv-windows.lock') }}
