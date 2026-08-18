@@ -9,6 +9,17 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: build
+    # Roll the week's routine bumps into a single PR instead of one per crate:
+    # one branch to review, one merge, and one CI run rather than five. Majors
+    # stay ungrouped so a breaking change is reviewed on its own rather than
+    # riding along with safe updates.
+    groups:
+      cargo:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     # quick-xml 0.38 reworked text handling (entities now arrive as separate
     # Event::GeneralRef events); the EPG parser needs migrating first. Remove
     # this once that migration lands so we can take 0.38+.
@@ -23,3 +34,10 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
