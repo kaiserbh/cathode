@@ -1,0 +1,10 @@
+# Pinned Windows libmpv + ANGLE bundle, published as a GitHub Release asset.
+#
+# These binaries used to be committed via Git LFS, which billed bandwidth on every
+# Windows CI checkout. Release assets are free and unmetered, so they live there now.
+#
+# To refresh: build a new zip, publish it under a new vendor-mpv-<date> tag, and
+# update all three fields below. See the README's "Refreshing the vendored libmpv".
+VERSION=20260706
+URL=https://github.com/kaiserbh/cathode/releases/download/vendor-mpv-20260706/mpv-windows-x64.zip
+SHA256=33cefff6cb831d36e2d51b26196a5a6b150a30bb2e8c66c4189e2bea3711953b

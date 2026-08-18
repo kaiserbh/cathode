@@ -39,8 +39,6 @@ jobs:
         with:
           # Build the exact tagged commit the release points at.
           ref: ${{ github.event.release.tag_name }}
-          # Windows needs the LFS-stored libmpv import lib + runtime DLLs.
-          lfs: ${{ runner.os == 'Windows' }}
 
       - run: rustup show
       - name: Add Rust target (macOS)
@@ -73,6 +71,20 @@ jobs:
             libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
             libayatana-appindicator3-dev patchelf \
             libmpv-dev libssl-dev pkg-config
+
+      # The Windows libmpv + ANGLE runtime isn't in git. It used to be, via Git LFS,
+      # which bills bandwidth per download -- ~125 MB on every Windows checkout. It's
+      # now a GitHub Release asset (free), fetched here and cached so repeat runs
+      # don't re-download it. The cache key tracks the pin in the lock file.
+      - name: Cache vendored Windows libmpv
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/vendor/mpv/windows-x64
+          key: mpv-win-x64-${{ hashFiles('scripts/mpv-windows.lock') }}
+      - name: Fetch vendored Windows libmpv
+        if: runner.os == 'Windows'
+        run: pwsh scripts/fetch-windows-mpv.ps1
 
       # `dx` is invoked by tauri's beforeBuildCommand (`dx bundle --release`);
       # `tauri-cli` provides `cargo tauri` for the Rust-only project. Both are
