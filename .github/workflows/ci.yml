@@ -29,21 +29,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          lfs: false
       # rust-toolchain.toml pins the channel + rustfmt; rustup honours it on first use.
       - run: rustup show
       - run: cargo fmt --all -- --check
 
   # Enforce: `cathode-core` stays WASM-safe and the
-  # Dioxus frontend still compiles to wasm32. No native deps, no LFS.
+  # Dioxus frontend still compiles to wasm32. No native deps.
   wasm:
     name: WASM / frontend build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          lfs: false
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
         with:
@@ -75,10 +71,6 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-24.04]
     steps:
       - uses: actions/checkout@v7
-        with:
-          # Windows links the vendored libmpv import lib + ships its DLLs, both
-          # stored in Git LFS. Without this the build fails at LNK1181 (mpv.lib).
-          lfs: ${{ runner.os == 'Windows' }}
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
         with:
@@ -102,5 +94,18 @@ jobs:
             libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
             libayatana-appindicator3-dev \
             libmpv-dev libssl-dev pkg-config
+      # The Windows libmpv + ANGLE runtime isn't in git. It used to be, via Git LFS,
+      # which bills bandwidth per download -- ~125 MB on every Windows checkout. It's
+      # now a GitHub Release asset (free), fetched here and cached so repeat runs
+      # don't re-download it. The cache key tracks the pin in the lock file.
+      - name: Cache vendored Windows libmpv
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/vendor/mpv/windows-x64
+          key: mpv-win-x64-${{ hashFiles('scripts/mpv-windows.lock') }}
+      - name: Fetch vendored Windows libmpv
+        if: runner.os == 'Windows'
+        run: pwsh scripts/fetch-windows-mpv.ps1
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo test --all
